@@ -14,9 +14,6 @@ remember to close down port 5000 when done debugging
 sudo ufw delete allow 5000
 ```
 
-
-```
-
 ###create a fork and clone the github repository
 on github, create a fork for the new project (based on this one, duh) 
 then clone that new project into a new directory
@@ -70,4 +67,9 @@ sudo ln -s /etc/nginx/sites-available/simpleapp /etc/nginx/sites-enabled
 sudo systemctl restart nginx
 sudo ufw allow 'Nginx Full'
 ```
+
+###Items to change in new app
+* change .gitignore simpleappenv to newappenv
+* change simpleapp.py to newapp.py
+* change wsgi.py line from simpleapp to newapp
 
