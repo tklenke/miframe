@@ -41,6 +41,7 @@ pip install gunicorn flask
 ```
 
 ###install any python requirement packages
+* see the app for any requirements
 
 ###run simpleapp.py with flask
 ```
@@ -56,9 +57,9 @@ gunicorn --bind 0.0.0.0:5000 wsgi:app
 ```
 
 ###install simpleapp as service
-*edit simpleapp.service
-..change user
-..edit paths
+* edit simpleapp.service
+  * change user
+  * edit paths
 ```
 sudo cp /<path to>/simpleapp/server/simpleapp.service /etc/systemd/system/
 sudo systemctl start simpleapp
