@@ -40,6 +40,8 @@ source myprojectenv/bin/activate
 pip install gunicorn flask
 ```
 
+###install any python requirement packages
+
 ###run simpleapp.py with flask
 ```
 cd fwww
@@ -54,6 +56,9 @@ gunicorn --bind 0.0.0.0:5000 wsgi:app
 ```
 
 ###install simpleapp as service
+*edit simpleapp.service
+..change user
+..edit paths
 ```
 sudo cp /<path to>/simpleapp/server/simpleapp.service /etc/systemd/system/
 sudo systemctl start simpleapp
@@ -69,8 +74,15 @@ sudo systemctl restart nginx
 sudo ufw allow 'Nginx Full'
 ```
 
+###Notes
+Find gunicorn log in /
+
 ###Items to change in new app
 * change .gitignore simpleappenv to newappenv
 * change simpleapp.py to newapp.py
 * change wsgi.py line from simpleapp to newapp
+* change simpleapp.server to newapp
+* change simpleapp.nginx to newapp
+* added server name or ip to newapp.nginx
+
 
