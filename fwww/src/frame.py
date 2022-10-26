@@ -138,7 +138,13 @@ def CheckPhotoServer():
 ## Request Next Image Meta from PhotoServer
 ## Request Image from PhotoServer
     image_url="http://10.0.1.33:5000/getimg"
-    img_data = io.BytesIO(requests.get(image_url).content)
+    try:
+        r = requests.get(image_url)
+    except:
+        return(None,None)
+    if r.status_code != 200:
+        return(None,None)
+    img_data = io.BytesIO(r.content)    
     img = Image.open(img_data)
     imgRec = ImageRecord()
     
