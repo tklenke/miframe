@@ -11,6 +11,17 @@ photo_root_path = "/media/sf_Our_Pictures/"
 photo_fallback_path = "/home/admin/Pictures/fallback/"
 dupes_directory = "zz_dupes"
 
+#image analyze settings
+threshold_num_std_dev = 2.0
+ts_epoch_day = 631170000.0
+
+#image mix to display settings, should total ~ 100
+random_weight = 10
+unseen_weight = 30
+upcoming_weight = 50
+liked_weight = 5
+favorites_weight = 5
+
 #fully qualified path for these two
 image_records_file_read = "/home/admin/projects/img_recs.csv"
 image_records_file_write = "/home/admin/projects/img_recs.csv"

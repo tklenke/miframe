@@ -19,6 +19,7 @@ import config as mifcfg
 import time
 import io
 import os
+import json
 
 #for html client
 import requests
@@ -29,94 +30,18 @@ from tkinter import ttk
 
 #for photos
 #sudo pip install --upgrade pillow  (version 9.2 for dev)
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageFile
 from PIL.ExifTags import TAGS
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 #MiFrame Shared library
 from mif import ImageRecord
 import mif
 
-# global
 
 
 
 #--------functions
-
-def GetImageOld():
-       #find a photo to display
-        photo_path = ''
-        while photo_path == '':
-            #get a random directory
-            randomDir = random.choice(dirs)
-            #get list of jpgs
-            print("rd" + randomDir)
-            try:
-                sharedphotos = conn.listPath(share_name, randomDir,pattern="*.jpg")
-                if sharedphotos == None:
-                    continue
-            except:
-                continue
-            #pick one at random
-            photo = random.choice(sharedphotos)
-            photo_path = randomDir + '/' + photo.filename
-
-        #read a photo to memory
-        fp = io.BytesIO()
-        file_attrs, retrlen = conn.retrieveFile(share_name,photo_path,fp)
-        fp.seek(0)
-
-        #resize the photo and setup for display
-        try:
-            imageRaw = Image.open(fp)
-        except:
-            print("Could not open:" + photo_path)
-            fp.close()
-            self.flip()
-            return
-
-        #print exif info
-        exif = getEXIF(imageRaw)
-
-        if exif == None:
-            print("could not get exif for " + photo_path + "\n")
-        else:
-            image_date = exif.get('datetime',"")
-            image_orientation = exif.get('orientation',1)
-        
-        #rotate first    
-        if image_orientation == 3:
-            imageRot = imageRaw.rotate(180)
-            print("Rotating " + photo_path + "\n")
-        elif image_orientation == 6:
-            imageRot= imageRaw.rotate(270)
-            print("Rotating " + photo_path + "\n")
-        elif image_orientation == 8:
-            imageRot = imageRaw.rotate(90)
-            print("Rotating " + photo_path + "\n")
-        else:
-            imageRot = imageRaw
-
-        #now find the image aspect ratio and size
-        image_s = imageRot.size    
-        image_w = image_s[0]
-        image_h = image_s[1]
-
-        ratio = float(image_w)/float(image_h)
-
-        if ratio < screen_ratio:  #height is the constraint (portrait)
-            h = int(screen_height)
-            w = int(h*ratio)
-            photoIsPortrait = True
-        else:   #width is the constraint
-            w = int(screen_width)
-            h = int(w/ratio)
-            photoIsPortrait = False
-
-        #then resize
-        imageRR = imageRot.resize((w,h),Image.Resampling.LANCZOS)
-
-        image1 = ImageTk.PhotoImage(imageRR)
-        fp.close()
         
 def ScanFallbackDir(aFBRecs):
     if len(aFBRecs) > 0:
@@ -137,16 +62,28 @@ def CheckPhotoServer():
 ## Find PhotoServer on Network
 ## Request Next Image Meta from PhotoServer
 ## Request Image from PhotoServer
-    image_url="http://10.0.1.33:5000/getimg"
+    #get img record
+    image_record_url = "http://10.0.1.33:5000/selectir"
+    try:
+        r = requests.get(image_record_url)
+    except:
+        return(None,None)
+    if r.status_code != 200:
+        return(None,None)
+
+    dDict = r.json()
+    imgRec = ImageRecord(dAttr = dDict)
+
+    image_url = f"http://10.0.1.33:5000/{dDict['id']}/img"
     try:
         r = requests.get(image_url)
     except:
         return(None,None)
     if r.status_code != 200:
         return(None,None)
+        
     img_data = io.BytesIO(r.content)    
     img = Image.open(img_data)
-    imgRec = ImageRecord()
     
     return (img,imgRec)
 
@@ -191,13 +128,10 @@ def GetDisplayReadyImage():
     #rotate first    
     if oImgRec.orientation == 3:
         imageRot = imageRaw.rotate(180)
-        print("Rotating " + photo_path + "\n")
     elif oImgRec.orientation == 6:
         imageRot= imageRaw.rotate(270)
-        print("Rotating " + photo_path + "\n")
     elif oImgRec.orientation == 8:
         imageRot = imageRaw.rotate(90)
-        print("Rotating " + photo_path + "\n")
     else:
         imageRot = imageRaw
     
@@ -221,6 +155,8 @@ def GetDisplayReadyImage():
     imageRR = imageRot.resize((w,h),Image.Resampling.LANCZOS)
 
     img = ImageTk.PhotoImage(imageRR)
+    #done with the Pillow image so close
+    imageRR.close()
     
     return(img)
     
