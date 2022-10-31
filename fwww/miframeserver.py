@@ -42,7 +42,9 @@ aRecentImgIds = []
 #-----------------ROUTES-------------------------------------
 @app.route("/")
 def home():
-    return render_template('home.html',lid=aRecentImgIds[-1],nlid=aRecentImgIds[-2])
+    aIds = aRecentImgIds[-10:]
+    aIds.reverse()
+    return render_template('home.html',page_title='Home',aids=aIds)
     
 @app.route("/selectir")
 def selectirj():
@@ -67,9 +69,9 @@ def getimage(img_id):
     else:
         return make_response(render_template('error.html'), 404)
         
-@app.route("/recents")
-def showrecents():
-    return jsonify(aRecentImgIds)
+@app.route("/<int:img_id>/editshow")
+def editshow(img_id,action=None):
+    return render_template('edit.html',page_title=f"Edit img:{img_id}",nId=img_id)
     
 @app.route("/<int:img_id>_<int:width>x<int:height>/thumb")
 def getthumb(img_id,width,height):
