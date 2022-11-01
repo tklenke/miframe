@@ -124,7 +124,7 @@ class ImageRecord:
 			self.likes = 0
 			
 	def __repr__(self):
-		return(f"{self.path, self.file_sz,self.dt,self.make,self.model,self.exif_ver,self.width,self.height,self.orientation,self.epoch_day,self.year_day}")
+		return(f"{self.path, self.file_sz,self.dt,self.make,self.model,self.exif_ver,self.width,self.height,self.orientation,self.epoch_day,self.year_day,self.likes,self.favorite,self.last_played,self.edited}")
 		
 	def __iter__(self):
 		return iter([ self.path , \
@@ -137,7 +137,11 @@ class ImageRecord:
 						self.height , \
 						self.orientation , \
 						self.epoch_day , \
-						self.year_day ])
+						self.year_day, \
+						self.likes, \
+						self.favorite, \
+						self.last_played, \
+						 ])
 						
 	def PopStdDays(self):
 		if self.dt is None:

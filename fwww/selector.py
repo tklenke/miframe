@@ -68,9 +68,12 @@ def GetIdsYrDay(aImgRecs):
     logging.debug(f"Found {len(aWeirdEDs)} weird epoch days")
     
     for i in range(0,len(aImgRecs)-1):
-        if aImgRecs[i].year_day not in dYearDayIds:
-            dYearDayIds[aImgRecs[i].year_day] = []
-        dYearDayIds[aImgRecs[i].year_day].append(i)
+        if aImgRecs[i].epoch_day not in aWeirdEDs:
+        # check to see that it's not one of the weird epoch days as that will swamp the other days
+            if aImgRecs[i].year_day not in dYearDayIds.keys():
+            #make sure that we have an array at that Year Day in the dict
+                dYearDayIds[aImgRecs[i].year_day] = []
+            dYearDayIds[aImgRecs[i].year_day].append(i)
     
     return (dYearDayIds)
     

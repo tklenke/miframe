@@ -63,39 +63,100 @@ def selectirj():
     
 @app.route("/<int:img_id>/img")
 def getimage(img_id):
-    if img_id in range(0,len(aImageRecords)):
-        fullpath = szPhotoRoot + aImageRecords[img_id].path
-        return send_file(fullpath,"image/jpeg")
-    else:
+    if img_id not in range(0,len(aImageRecords)):
         return make_response(render_template('error.html'), 404)
+    fullpath = szPhotoRoot + aImageRecords[img_id].path
+    return send_file(fullpath,"image/jpeg")
         
-@app.route("/<int:img_id>/editshow")
-def editshow(img_id,action=None):
-    return render_template('edit.html',page_title=f"Edit img:{img_id}",nId=img_id)
+@app.route("/<int:img_id>/edit")
+def edit(img_id):
+    if img_id not in range(0,len(aImageRecords)):
+        return make_response(render_template('error.html'), 404)
+    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
+        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
+
+@app.route("/<int:img_id>/rotate")
+def rotate(img_id):
+    if img_id not in range(0,len(aImageRecords)):
+        return make_response(render_template('error.html'), 404)
     
+    #rotate first
+    if aImageRecords[img_id].orientation in (None,0,1):
+        aImageRecords[img_id].orientation = 3
+    elif aImageRecords[img_id].orientation in (3,4):
+        aImageRecords[img_id].orientation = 6
+    elif aImageRecords[img_id].orientation in (5,6):
+        aImageRecords[img_id].orientation = 8
+    elif aImageRecords[img_id].orientation in (7,8):
+        aImageRecords[img_id].orientation = 0
+
+    #put it on the top of the queue
+    aIdQueue.append(img_id)
+     
+    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
+        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
+            
+@app.route("/<int:img_id>/thumbsup")
+def thumbsup(img_id):
+    if img_id not in range(0,len(aImageRecords)):
+        return make_response(render_template('error.html'), 404)
+    aImageRecords[img_id].likes += 1
+    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
+        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
+            
+@app.route("/<int:img_id>/thumbsdown")
+def thumbsdown(img_id):
+    if img_id not in range(0,len(aImageRecords)):
+        return make_response(render_template('error.html'), 404)
+    if aImageRecords[img_id].likes == 0:
+        aImageRecords[img_id].favorite = False
+    if aImageRecords[img_id].likes > 0:
+        aImageRecords[img_id].likes -= 1
+
+    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
+        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
+            
+@app.route("/<int:img_id>/favorite")
+def favorite(img_id):
+    if img_id not in range(0,len(aImageRecords)):
+        return make_response(render_template('error.html'), 404)
+    aImageRecords[img_id].favorite = True
+    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
+        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
+            
+@app.route("/<int:img_id>/block")
+def block(img_id):
+    if img_id not in range(0,len(aImageRecords)):
+        return make_response(render_template('error.html'), 404)
+    aImageRecords[img_id].likes = -1
+    aImageRecords[img_id].favorite = False
+    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
+        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
+            
 @app.route("/<int:img_id>_<int:width>x<int:height>/thumb")
 def getthumb(img_id,width,height):
-    if img_id in range(0,len(aImageRecords)):
-        fullpath = szPhotoRoot + aImageRecords[img_id].path
-        with Image.open(fullpath) as img:
-            #rotate first    
-            if aImageRecords[img_id].orientation == 3:
-                img.rotate(180)
-            elif aImageRecords[img_id].orientation == 6:
-                img.rotate(270)
-            elif aImageRecords[img_id].orientation == 8:
-                img.rotate(90)
-            
-            img.thumbnail((width,height))
-            img_io = io.BytesIO()
-            img.save(img_io, 'JPEG', quality=70)
-            img_io.seek(0)
-            return send_file(img_io, mimetype='image/jpeg')
-    else:
+    if img_id not in range(0,len(aImageRecords)):
         return make_response(render_template('error.html'), 404)
+    fullpath = szPhotoRoot + aImageRecords[img_id].path
 
-         
-     
+    with Image.open(fullpath) as img:
+        #rotate first    
+        if aImageRecords[img_id].orientation == 3:
+            iRot = img.rotate(180)
+        elif aImageRecords[img_id].orientation == 6:
+            iRot = img.rotate(270)
+        elif aImageRecords[img_id].orientation == 8:
+            iRot = img.rotate(90)
+        else:
+            iRot = img
+        
+        iRot.thumbnail((width,height))
+        img_io = io.BytesIO()
+        iRot.save(img_io, 'JPEG', quality=70)
+        img_io.seek(0)
+        return send_file(img_io, mimetype='image/jpeg')
+        
+
     
 if __name__ == "__main__":
    app.run(host='0.0.0.0')
