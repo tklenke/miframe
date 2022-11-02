@@ -7,12 +7,12 @@ import json
 #sudo apt-get install python3-scipy
 import scipy.stats as stats
 
+#miframe specific includes
+from src.mif import ImageRecord, DictInc, LoadIRcsv, SaveIRcsv
+
 #setup
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
 
-#miframe specific includes
-from src.mif import ImageRecord
-from src.mif import DictInc
 
 #load in csv file
 ## build list of photos/epoch day
@@ -25,17 +25,7 @@ from src.mif import DictInc
 ## most likely should be log decay of day of year, tomorrow most likely, yesterday not at all likely
 #serve the file
 
-#load in csv file
-def LoadIRcsv(fpath):
-    aImgRecs = []
 
-    with open(fpath, 'r') as csvfile:
-        logging.debug(f"loading records from: {fpath}")
-        reader = csv.reader(csvfile)
-        for row in reader:
-            oIR = ImageRecord(aAttr = row)
-            aImgRecs.append(oIR)
-    return (aImgRecs)
     
 
 def GetWeirdEpochDays(aImgRecs):
@@ -77,6 +67,33 @@ def GetIdsYrDay(aImgRecs):
     
     return (dYearDayIds)
     
+def GetBlockedIds(aImgRecs):
+    aBIds = []
+    for i in range(0, len(aImgRecs)):
+        if aImgRecs[i].likes < 0:
+            aBIds.append(i)
+    return(aBIds)
+    
+def GetFavoriteIds(aImgRecs):
+    aFIds = []
+    for i in range(0, len(aImgRecs)):
+        if aImgRecs[i].favorite:
+            aFIds.append(i)
+    return(aFIds)
+    
+def GetLikedIds(aImgRecs, nLikes):
+    aLIds = []
+    for i in range(0, len(aImgRecs)):
+        if aImgRecs[i].likes == nLikes:
+            aLIds.append(i)
+    return(aLIds)
+
+def GetEditedSinceIds(aImgRecs,dt):
+    aEIds = []
+    for i in range(0, len(aImgRecs)):
+        if aImgRecs[i].edited is not None and aImgRecs[i].edited > dt:
+            aEIds.append(i)
+    return(aEIds)    
 
 
 #GetNext Image ID
@@ -173,15 +190,47 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.DEBUG)
     
     aImageRecords = LoadIRcsv(mifcfg.image_records_file_read)
-    logging.debug(f"Read {len(aImageRecords)} image records")
+    tLoad = time.process_time()
+    logging.debug(f"Read {len(aImageRecords)} image records [{tLoad-tStart}]")
     
     aWeirdDays = GetWeirdEpochDays(aImageRecords)
-    logging.debug(f"Found {len(aWeirdDays)} weird days")
+    tWeird = time.process_time()
+    logging.debug(f"Found {len(aWeirdDays)} weird days [{tWeird-tLoad}]")
+    
+    for n in range(1,4):
+        logging.debug(f"Found {len(GetLikedIds(aImageRecords,n))} ids liked level [{n}]")
+    logging.debug(f"Found {len(GetFavoriteIds(aImageRecords))} favorites")
+    logging.debug(f"Found {len(GetBlockedIds(aImageRecords))} blocked")
+    tLFB = time.process_time()
+    logging.debug(f"Liked, Fav, Blocked time [{tLFB-tWeird}]")
     
     logging.debug(f"Shuffling image records")
     aIds = Shuffle(aImageRecords)
-    logging.debug(f"Done shuffling")
+    tShuffle = time.process_time()
+    logging.debug(f"Done shuffling [{tShuffle-tLFB}]")
     
+    #make some test cases
+    a1 = [1000,1001,1002,3000,3001]
+    a2 = [1100,1101,1102,3100,3101]
+    a3 = [11100,11101,11102,13100,13101]
+    a4 = [21100,21101,21102,23100,23101]
+    a5 = [2200,2201,2202,2300,2301]
+    
+    #set status for a few sets of test records
+    # ~ for i in a1:
+        # ~ aImageRecords[i].ThumbsUp()
+    # ~ for i in a2:
+        # ~ aImageRecords[i].ThumbsUp()
+        # ~ aImageRecords[i].ThumbsUp()
+    # ~ for i in a3:
+        # ~ aImageRecords[i].ThumbsUp()
+        # ~ aImageRecords[i].ThumbsUp()
+        # ~ aImageRecords[i].ThumbsUp()
+        # ~ aImageRecords[i].ThumbsUp()
+    # ~ for i in a4:
+        # ~ aImageRecords[i].Favorite()
+    # ~ for i in a5:
+        # ~ aImageRecords[i].Block()        
 
     for i in range(0,1):
         irand = aIds.pop()
@@ -190,6 +239,20 @@ if __name__ == '__main__':
         print (dJAttr)
         ir = ImageRecord(dAttr = dJAttr)
         print(ir)
+       
+    #reset all sets of test records
+    # ~ for i in (a1+a2+a3+a4+a5):
+        # ~ aImageRecords[i].favorite = False
+        # ~ aImageRecords[i].likes = 0
+        # ~ aImageRecords[i].edited = None
+        # ~ aImageRecords[i].last_played = None
+    dtYesterday = datetime.datetime.now() - datetime.timedelta(days=1)
+    logging.debug(f"Found {len(GetEditedSinceIds(aImageRecords,dtYesterday))} edited")
+        
+    tSaveS = time.process_time()
+    SaveIRcsv(mifcfg.image_records_file_read,aImageRecords,safe=True)
+    tSave = time.process_time()
+    logging.debug(f"Done saving [{tSave-tSaveS}]")
     
     tEnd = time.process_time()
     logging.debug(f"Elapsed Time:\t{tEnd-tStart}")

@@ -127,11 +127,11 @@ def GetDisplayReadyImage():
     
     #rotate first    
     if oImgRec.orientation in (3,4):
-        imageRot = imageRaw.rotate(180)
+        imageRot = imageRaw.rotate(180,expand=True)
     elif oImgRec.orientation in (5,6):
-        imageRot= imageRaw.rotate(270)
+        imageRot= imageRaw.rotate(270,expand=True)
     elif oImgRec.orientation in (7,8):
-        imageRot = imageRaw.rotate(90)
+        imageRot = imageRaw.rotate(90,expand=True)
     else:
         imageRot = imageRaw
     

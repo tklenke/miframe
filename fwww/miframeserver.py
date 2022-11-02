@@ -1,5 +1,5 @@
 # app.py or app/__init__.py
-from flask import Flask, render_template, send_file, jsonify
+from flask import Flask, render_template, send_file, jsonify, redirect, url_for
 import src.config as mifcfg
 import datetime, time
 import selector
@@ -80,59 +80,41 @@ def rotate(img_id):
     if img_id not in range(0,len(aImageRecords)):
         return make_response(render_template('error.html'), 404)
     
-    #rotate first
-    if aImageRecords[img_id].orientation in (None,0,1):
-        aImageRecords[img_id].orientation = 3
-    elif aImageRecords[img_id].orientation in (3,4):
-        aImageRecords[img_id].orientation = 6
-    elif aImageRecords[img_id].orientation in (5,6):
-        aImageRecords[img_id].orientation = 8
-    elif aImageRecords[img_id].orientation in (7,8):
-        aImageRecords[img_id].orientation = 0
+    aImageRecords[img_id].RotateCW()
 
-    #put it on the top of the queue
-    aIdQueue.append(img_id)
-     
-    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
-        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
-            
+    #put it on the top of the queue, only once
+    if aIdQueue[-1] != img_id:
+        aIdQueue.append(img_id)
+    return redirect(url_for('edit',img_id=img_id))
+                
 @app.route("/<int:img_id>/thumbsup")
 def thumbsup(img_id):
     if img_id not in range(0,len(aImageRecords)):
         return make_response(render_template('error.html'), 404)
-    aImageRecords[img_id].likes += 1
-    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
-        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
+    aImageRecords[img_id].ThumbsUp()
+    return redirect(url_for('edit',img_id=img_id))
             
 @app.route("/<int:img_id>/thumbsdown")
 def thumbsdown(img_id):
     if img_id not in range(0,len(aImageRecords)):
         return make_response(render_template('error.html'), 404)
-    if aImageRecords[img_id].likes == 0:
-        aImageRecords[img_id].favorite = False
-    if aImageRecords[img_id].likes > 0:
-        aImageRecords[img_id].likes -= 1
-
-    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
-        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
-            
+    aImageRecords[img_id].ThumbsDown()
+    return redirect(url_for('edit',img_id=img_id))
+                
 @app.route("/<int:img_id>/favorite")
 def favorite(img_id):
     if img_id not in range(0,len(aImageRecords)):
         return make_response(render_template('error.html'), 404)
-    aImageRecords[img_id].favorite = True
-    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
-        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
-            
+    aImageRecords[img_id].Favorite()    
+    return redirect(url_for('edit',img_id=img_id))
+                
 @app.route("/<int:img_id>/block")
 def block(img_id):
     if img_id not in range(0,len(aImageRecords)):
         return make_response(render_template('error.html'), 404)
-    aImageRecords[img_id].likes = -1
-    aImageRecords[img_id].favorite = False
-    return render_template('edit.html',page_title=f"Edit img:{img_id}",\
-        nId=img_id,dImgInfo=aImageRecords[img_id].__dict__)
-            
+    aImageRecords[img_id].Block() 
+    return redirect(url_for('edit',img_id=img_id))
+                
 @app.route("/<int:img_id>_<int:width>x<int:height>/thumb")
 def getthumb(img_id,width,height):
     if img_id not in range(0,len(aImageRecords)):
@@ -141,12 +123,12 @@ def getthumb(img_id,width,height):
 
     with Image.open(fullpath) as img:
         #rotate first    
-        if aImageRecords[img_id].orientation == 3:
-            iRot = img.rotate(180)
-        elif aImageRecords[img_id].orientation == 6:
-            iRot = img.rotate(270)
-        elif aImageRecords[img_id].orientation == 8:
-            iRot = img.rotate(90)
+        if aImageRecords[img_id].orientation in (3,4):
+            iRot = img.rotate(180,expand=True)
+        elif aImageRecords[img_id].orientation in (5,6):
+            iRot = img.rotate(270,expand=True)
+        elif aImageRecords[img_id].orientation in (7,8):
+            iRot = img.rotate(90,expand=True)
         else:
             iRot = img
         
