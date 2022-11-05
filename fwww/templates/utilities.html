@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="row">
+      <div class="two columns">
+        <a href="{{ url_for('home') }}">
+          <img src="{{ url_for('static',filename='MiFrameLogo50x50.png') }}">
+        </a>
+      </div>
+    </div>
+    <div class="row">
+      <div class="full column" style="margin-top: 40px">
+            <h4>MiFrame Utilities</h4>
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+            Nullam ut neque a risus auctor bibendum sed eget mauris. 
+            </p>
+      </div>
+    </div>
+    <div class="row">
+      <ul>
+        <div class="three columns">
+          <li>
+            <a href="{{url_for('savenow')}}">
+            Force Save Now
+            </a>
+          </li>
+          <li>In Queue</li>
+        </div>
+        <div class="three columns">
+          <li>Favorites</li>
+          <li>Recently Edited</li>
+          <li>Blocked</li>
+        </div>
+      </ul>
+    </div>
+    <div class="row">
+      <div class="seven columns">
+        <h5>Server Status</h5>
+        <pre><code>{% for key in dstats.keys() %}{{key}} : {{dstats[key]}}
+{% endfor %}
+        </code></pre>
+      </div>
+    </div>
+{% endblock %}

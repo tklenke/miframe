@@ -5,6 +5,7 @@ import csv
 import os
 import logging
 import datetime
+import uuid
 
 #image record
 IR_PATH = 0
@@ -54,10 +55,28 @@ class ImageRecord:
                 except:
                     return (None)
             elif szType == 'datetime':
-                try:
+                if isinstance(val,float) or isinstance(val,int):
                     return (datetime.datetime.fromtimestamp(int(val)))
-                except:
-                    return (None)
+                elif isinstance(val,str):
+                    if len(val) == 0:
+                        return(None)
+                    if len(val) < len('yyyy-mm-dd hh:ss:mm'):
+                        try:
+                            return( datetime.datetime.fromtimestamp(int(float(val))) )   
+                        except:
+                            logging.warn(f"Invalid date format value [{val}]")
+                            return(None)                            
+                    else:
+                        szFormat = "%Y-%m-%d %H:%M:%S"
+                        if '.' in val:
+                            szFormat += ".%f"
+                        try:
+                            return(datetime.datetime.strptime(val,szFormat))
+                        except:
+                            logging.warn(f"Invalid date format value [{val}]")
+                            return(None)
+                else:
+                    return(None)
             elif szType == 'bool':
                 if isinstance(val,bool):
                     return(val)
@@ -139,7 +158,7 @@ class ImageRecord:
     def __iter__(self):
         return iter([ self.path , \
                         self.file_sz , \
-                        self.dt , \
+                        self.dt, \
                         self.make , \
                         self.model , \
                         self.exif_ver , \
@@ -237,17 +256,21 @@ class ImageRecord:
         return()
         
     def ThumbsDown(self):
-        if self.likes == 0:
+        #if favorite, set to false, don't change thumbs down level
+        if self.favorite == True:
             self.favorite = False
+            self.Edited()
+            return()
         #don't allow negative likes as that will set to be blocked
         if self.likes > 0:
             self.likes -= 1
+        self.Edited()
         return()
     
     def Favorite(self): 
         self.favorite = True
         #a favorited image can't also be blocked (-1 likes)
-        if self.likes > 0:
+        if self.likes < 0:
             self.likes = 0
         self.Edited()
         return()
@@ -283,17 +306,29 @@ def LoadIRcsv(fpath):
     return (aImgRecs)
     
 def SaveIRcsv(fpath, aImgRecs, safe=True):
+    nFSold = os.path.getsize(fpath)
     if safe and os.path.exists(fpath):
         fold = fpath + ".old"
         logging.info(f"safe save requested moving {fpath} to {fold}")
         os.replace(fpath,fold)
+        nFSold = os.path.getsize(fold)
     #write records to csv file
     logging.info(f"saving {len(aImgRecs)} records to {fpath}")
+    n = 0
     with open(fpath, 'w') as csvfile:
         csvout = csv.writer(csvfile)
         for row in aImgRecs:
             csvout.writerow(row)
-    return()    
+            n += 1
+    nFS = os.path.getsize(fpath)
+
+    nFSDeltaPerc = int(abs(float(nFS-nFSold)/float(nFS)))
+    logging.debug(f"File size change percentage on save:{nFSDeltaPerc}%")
+    if nFSDeltaPerc >= 3:
+        logging.warn(f"Large change in file size {nFS} {nFSDeltaPerc}% for file {fpath}")        
+    
+    #return number records saved and file size
+    return(n,nFS)    
         
 def GetStandardDays(dt):
     if dt is None:
@@ -314,3 +349,7 @@ def DictInc(d,k):
         d[k]+=1
     else:
         d[k]=1
+        
+def GetMachineId():
+    #remove first 9 characters as that is generated from timestamp and we want non-changing portion
+    return(str(uuid.uuid1())[9:])

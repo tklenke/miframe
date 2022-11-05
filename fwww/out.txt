@@ -1,0 +1,2 @@
+{'path': '006/2008-10-29/IMG_0756.JPG', 'file_sz': 2689666, 'dt': 1224952872.0, 'make': 'Canon', 'model': 'Canon EOS DIGITAL REBEL', 'exif_ver': 221, 'width': 3072, 'height': 2048, 'orientation': 1, 'epoch_day': 6872, 'year_day': 299, 'likes': 0, 'favorite': None, 'last_played': None, 'edited': None, 'id': 11517}
+('006/2008-10-29/IMG_0756.JPG', 2689666, datetime.datetime(2008, 10, 25, 12, 41, 12), 'Canon', 'Canon EOS DIGITAL REBEL', 221, 3072, 2048, 1, 6872, 299, 0, False, None, None)

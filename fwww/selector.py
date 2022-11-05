@@ -8,7 +8,7 @@ import json
 import scipy.stats as stats
 
 #miframe specific includes
-from src.mif import ImageRecord, DictInc, LoadIRcsv, SaveIRcsv
+from src.mif import ImageRecord, DictInc, LoadIRcsv, SaveIRcsv, GetMachineId
 
 #setup
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
@@ -41,7 +41,7 @@ def GetWeirdEpochDays(aImgRecs):
     fStd = stats.tstd(list(dED.values()))
 
     nOutlierThreshold = int(fMean + mifcfg.threshold_num_std_dev * fStd)
-    logging.debug(f"Mean:{fMean} Std Dev:{fStd}  Threshold:{nOutlierThreshold}")
+    logging.debug(f"Mean:{fMean:.2f} Std Dev:{fStd:.2f}  Threshold:{nOutlierThreshold}")
     
     for key in dED.keys():
         if dED[key] > nOutlierThreshold:
@@ -128,14 +128,19 @@ def Shuffle(aImgRecs):
     i = 0
     while i < nRandom:
         rId = random.randrange(0,len(aImgRecs),1)
-        if aImgRecs[rId].likes > -1:
-            i += 1
-            aShuffleIds.append(rId)
+        #skip blocked
+        if aImgRecs[rId].likes < 0:
+            continue;
+        i += 1
+        aShuffleIds.append(rId)
             
     #pick random of everything that has not been seen
     i = 0        
     while i < nUnseen:
         rId = random.randrange(0,len(aImgRecs),1)
+        #skip blocked
+        if aImgRecs[rId].likes < 0:
+            continue;
         if aImgRecs[rId].last_played is None:
             i += 1
             aShuffleIds.append(rId)
@@ -154,26 +159,46 @@ def Shuffle(aImgRecs):
     aUpcomingIds += GetIdsNDays(dIdsByYearDay,nTodayYearDay,15)
     aUpcomingIds += GetIdsNDays(dIdsByYearDay,nTodayYearDay,30)
     aUpcomingIds += GetIdsNDays(dIdsByYearDay,nTodayYearDay,90)
+    logging.debug(f"Shuffling {len(aUpcomingIds)} Upcoming Recs")
     while i < nUpcoming:
         rId = random.choice(aUpcomingIds)
+        #skip blocked
+        if aImgRecs[rId].likes < 0:
+            continue;
         if rId not in aShuffleIds:
             i += 1
             aShuffleIds.append(rId)
-    # ~ i = 0        
-    # ~ while i < nLiked:
-    # ~ #pick random of everything that has been liked
-        # ~ rId = random.randrange(0,len(aImgRecs),1)
-        # ~ if aImgRecs[rId].likes > 0:
-            # ~ i += 1
-            # ~ aShuffleIds.append(rId)            
-    # ~ i = 0        
-    # ~ while i < nFavorites:
-    # ~ #pick random of everything that has been liked
-        # ~ rId = random.randrange(0,len(aImgRecs),1)
-        # ~ if aImgRecs[rId].favorite:
-            # ~ i += 1
-            # ~ aShuffleIds.append(rId)            
     
+    #Get random of ThumbsUp photos once we have enough liked photos
+    i = 0        
+    aLikedIds = GetLikedIds(aImgRecs,3)
+    aLikedIds += GetLikedIds(aImgRecs,2)
+    aLikedIds += GetLikedIds(aImgRecs,1)
+    logging.debug(f"Shuffling {len(aLikedIds)} Liked Recs")
+    if len(aLikedIds) > nLiked:
+        while i < nLiked:
+            #pick random of everything that has been liked
+            rId = random.choice(aLikedIds)
+            #skip blocked not needed
+            if rId not in aShuffleIds:
+                i += 1
+                aShuffleIds.append(rId)
+                
+    #Get random of Favorited photos once we have enough liked photos
+    i = 0
+    aFavoriteIds = GetFavoriteIds(aImgRecs)
+    logging.debug(f"Shuffling {len(aFavoriteIds)} Favorite Recs")
+    if len(aFavoriteIds) > nFavorites:
+        while i < nFavorites:
+            #pick random of everything that has been liked
+            rId = random.choice(aFavoriteIds)
+            #skip blocked not needed
+            if rId not in aShuffleIds:
+                i += 1
+                aShuffleIds.append(rId)
+    else:
+        aShuffleIds += aFavoriteIds
+                
     #shuffle the array well    
     for i in range(0,10):
         random.shuffle(aShuffleIds)
@@ -232,13 +257,13 @@ if __name__ == '__main__':
     # ~ for i in a5:
         # ~ aImageRecords[i].Block()        
 
-    for i in range(0,1):
-        irand = aIds.pop()
-        szJSON = aImageRecords[irand].GetJsonId(irand)
-        dJAttr = json.loads(szJSON)
-        print (dJAttr)
-        ir = ImageRecord(dAttr = dJAttr)
-        print(ir)
+    # ~ for i in range(0,1):
+        # ~ irand = aIds.pop()
+        # ~ szJSON = aImageRecords[irand].GetJsonId(irand)
+        # ~ dJAttr = json.loads(szJSON)
+        # ~ print (dJAttr)
+        # ~ ir = ImageRecord(dAttr = dJAttr)
+        # ~ print(ir)
        
     #reset all sets of test records
     # ~ for i in (a1+a2+a3+a4+a5):

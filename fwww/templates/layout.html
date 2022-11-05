@@ -32,6 +32,19 @@
   <!-- Primary Page Layout
   –––––––––––––––––––––––––––––––––––––––––––––––––– -->
   <div class="container">
+    <div class="row">
+      <div class="full column" style="color:red;background-color:#FFCCCB;">
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul>
+    {% for message in messages %}
+      <li>{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+      </div>
+    </div>
       {% block content %}
       {% endblock %}
   </div>
