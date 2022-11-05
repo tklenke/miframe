@@ -9,7 +9,7 @@
     </div>
     <div class="row">
       <div class="full column" style="margin-top: 40px">
-            <h4>MiFrame Utilities</h4>
+            <h3>MiFrame Utilities</h3>
             <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
             Nullam ut neque a risus auctor bibendum sed eget mauris. 
             </p>
@@ -26,9 +26,16 @@
           <li>In Queue</li>
         </div>
         <div class="three columns">
-          <li>Favorites</li>
-          <li>Recently Edited</li>
-          <li>Blocked</li>
+          <li>
+            <a href="{{ url_for('favorites') }}">
+            Favorites
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('blocked') }}">
+            Blocked
+            </a>
+          </li>
         </div>
       </ul>
     </div>

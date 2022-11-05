@@ -1,10 +1,13 @@
 {% extends "layout.html" %}
 {% block content %}
     <div class="row">
-      <div class="two columns">
+      <div class="one column">
         <a href="{{ url_for('home') }}">
           <img src="{{ url_for('static',filename='MiFrameLogo50x50.png') }}">
         </a>
+      </div>
+      <div class="two columns">
+        <a href="{{ url_for('utilities')}}">Utilities</a>
       </div>
     </div>
     <div class="row">

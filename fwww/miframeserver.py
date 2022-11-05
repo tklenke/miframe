@@ -164,7 +164,9 @@ def replay(img_id):
         return make_response(render_template('error.html'), 404)
     
     #put it on the top of the queue, only once
-    if aIdQueue[-1] != img_id:
+    if len(aIdQueue) == 0:
+        aIdQueue.append(img_id)
+    elif aIdQueue[-1] != img_id:
         aIdQueue.append(img_id)
     return redirect(url_for('edit',img_id=img_id))
 
@@ -219,6 +221,16 @@ def block(img_id):
 def utilities():
     dStats = GetServerStats()
     return render_template('utilities.html',page_title='Utilities',dstats=dStats)
+    
+@app.route("/favorites")
+def favorites():
+    aIds = selector.GetFavoriteIds(aImageRecords)
+    return render_template('list.html',page_title='Favorites',aids=aIds)
+
+@app.route("/blocked")
+def blocked():
+    aIds = selector.GetBlockedIds(aImageRecords)
+    return render_template('list.html',page_title='Blocked',aids=aIds)
     
 @app.route("/savenow")
 def savenow():
