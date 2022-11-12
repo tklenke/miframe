@@ -53,13 +53,13 @@
           Thumbs Up&nbsp; &nbsp; &nbsp;
         </a>
         <a class="button button-primary" href="{{ url_for('thumbsdown',img_id=nId) }}"
-            style="background-color:red;  width:150px;"">
+            style="background-color:red;  width:150px;">
           Thumbs Down
         </a>
       </div>          
       <div class="two columns">
         <a class="button button-primary" href="{{ url_for('favorite',img_id=nId) }}"
-            style="background-color:yellow; color:black; width:150px;"">
+            style="background-color:yellow; color:black; width:150px;">
           Favorite
         </a>
       </div>          
@@ -72,8 +72,16 @@
     </div>
     <div class="row">
       <div class="six columns">
+        <a href="{{ url_for('neighbors',img_id=nId) }}">
+          Neighbors
+        </a>
+      </div>
+    </div>
+    <div class="row">
+      <div class="six columns">
         <pre><code>{% for key in dImgInfo.keys() %}{{key}} : {{dImgInfo[key]}}
 {% endfor %}</code></pre>
       </div>
     </div>
+
 {% endblock %}

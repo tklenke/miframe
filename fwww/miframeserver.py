@@ -113,7 +113,7 @@ def selectirj():
         aIdQueue = selector.Shuffle(aImageRecords)
         nId = aIdQueue.pop()
     aRecentImgIds.append(nId)
-    aImageRecords[nId].last_played = datetime.datetime.now().timestamp()
+    aImageRecords[nId].last_played = datetime.datetime.now()
     dDict = aImageRecords[nId].__dict__
     dDict['id'] = nId
     return jsonify(dDict)
@@ -213,7 +213,8 @@ def block(img_id):
     aImageRecords[img_id].Block()
     #put on queue to save
     aDirtyIds.append(img_id) 
-    return redirect(url_for('edit',img_id=img_id))
+    flash(f"Image: {img_id} Blocked")
+    return redirect(url_for('neighbors',img_id=img_id))
 
     
 #-----utility routes----------------
@@ -227,10 +228,32 @@ def favorites():
     aIds = selector.GetFavoriteIds(aImageRecords)
     return render_template('list.html',page_title='Favorites',aids=aIds)
 
+@app.route("/liked")
+def liked():
+    aIds = selector.GetLikedIds(aImageRecords,3)
+    aIds += selector.GetLikedIds(aImageRecords,2)
+    aIds += selector.GetLikedIds(aImageRecords,1)
+    return render_template('list.html',page_title='Thumbs Up / Liked',aids=aIds)
+
 @app.route("/blocked")
 def blocked():
     aIds = selector.GetBlockedIds(aImageRecords)
     return render_template('list.html',page_title='Blocked',aids=aIds)
+
+@app.route("/<int:img_id>/neighbors")
+def neighbors(img_id):
+    if img_id not in range(0,len(aImageRecords)):
+        return make_response(render_template('error.html'), 404)
+    aIds = []
+    nLower = img_id - 7
+    nUpper = img_id + 7
+    if nLower < 1:
+        nLower = 1
+    if nUpper > len(aImageRecords):
+        nUpper = len(aImageRecords)
+    for i in range(nLower,nUpper):
+        aIds.append(i)
+    return render_template('list.html',page_title=f"Neighbors:{img_id}",aids=aIds)
     
 @app.route("/savenow")
 def savenow():

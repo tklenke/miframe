@@ -231,6 +231,11 @@ class ImageRecord:
         dDict = self.__dict__
         if dDict['dt'] is not None:
             dDict['dt'] = dDict['dt'].timestamp()
+        if dDict['last_played'] is not None:
+            dDict['last_played'] = dDict['last_played'].timestamp()
+        if dDict['edited'] is not None:
+            dDict['edited'] = dDict['edited'].timestamp()
+
         dDict['id'] = nId
         return(json.dumps(dDict,skipkeys=True))
         

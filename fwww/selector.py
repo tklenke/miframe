@@ -95,6 +95,13 @@ def GetEditedSinceIds(aImgRecs,dt):
             aEIds.append(i)
     return(aEIds)    
 
+def GetUnseenRecentlyIds(aImgRecs, dt):
+    aEIds = []
+    for i in range(0, len(aImgRecs)):
+        if aImgRecs[i].last_played is None or aImgRecs[i].last_played < dt:
+            aEIds.append(i)
+    return(aEIds)    
+
 
 #GetNext Image ID
 ## calling program should do the following
@@ -121,6 +128,7 @@ def Shuffle(aImgRecs):
     nUpcoming = mifcfg.upcoming_weight
     nLiked = mifcfg.liked_weight
     nFavorites = mifcfg.favorites_weight
+    logging.debug(f"Shuffle weights Random:{nRandom} Unseen:{nUnseen} Upcoming:{nUpcoming} Liked: Favorites:{nFavorites}")
     
     aShuffleIds = []
     
@@ -130,20 +138,31 @@ def Shuffle(aImgRecs):
         rId = random.randrange(0,len(aImgRecs),1)
         #skip blocked
         if aImgRecs[rId].likes < 0:
-            continue;
-        i += 1
-        aShuffleIds.append(rId)
-            
-    #pick random of everything that has not been seen
-    i = 0        
-    while i < nUnseen:
-        rId = random.randrange(0,len(aImgRecs),1)
-        #skip blocked
-        if aImgRecs[rId].likes < 0:
-            continue;
-        if aImgRecs[rId].last_played is None:
+            continue
+        #only choose once
+        if rId not in aShuffleIds:
             i += 1
             aShuffleIds.append(rId)
+            
+    #pick random of everything that has not been seen recently
+    i = 0
+    dtYearAgo = datetime.datetime.now() - datetime.timedelta(days=365)
+    aUnseenIds = GetUnseenRecentlyIds(aImgRecs, dtYearAgo)
+    logging.debug(f"Shuffling {len(aUnseenIds)} Unseen since {dtYearAgo} Recs")
+    if len(aUnseenIds) > nUnseen:    
+        while i < nUnseen:
+            rId = random.choice(aUnseenIds)
+            #skip blocked
+            if aImgRecs[rId].likes < 0:
+                continue;
+            #only choose once
+            if rId in aShuffleIds:
+                continue
+            if aImgRecs[rId].last_played is None:
+                i += 1
+                aShuffleIds.append(rId)
+    else:
+        aShuffleIds += aUnseenIds
             
     #pick random of photos taken in day of year in near future
     i = 0
@@ -183,6 +202,8 @@ def Shuffle(aImgRecs):
             if rId not in aShuffleIds:
                 i += 1
                 aShuffleIds.append(rId)
+    else:
+        aShuffleIds += aLikedIds
                 
     #Get random of Favorited photos once we have enough liked photos
     i = 0
