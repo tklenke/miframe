@@ -1,4 +1,58 @@
-#Empty Simple Flask Project with Notes.
+# MiFrame Installation and Set-up
+
+# Non-Technical User (TODO)
+## Unit Set-up
+1. unbox and plug in
+1. on startup Raspbian Desktop wallpaper shows "please wait" until MiFrame starts
+    1. MiFrame-frame starts
+        1. Checks for config.json, if exists: then goes into normal start up
+        1. else: goes into set-up state
+    1. MiFrame-Server starts
+        1. Checks for config.json if exists: then goes into normal startup
+            1. if config.json unit type is frame then server shuts down
+            1. else: server starts normal operations
+        1. else: server goes into Set-up State
+            - Set-up State Flow
+                1. default wifi network ssid, password and URL displayed on Frame
+                1. user connects to default ssid and navigates to URL
+                1. user uses webUI to connect to users preferred network
+                1. Server saves connection information to disk
+                1. Reboot is scheduled
+1. on startup MiFrame shows connection information (URL) to server
+    - Welcome to MiFrame.  For photo controls visit http://url
+
+
+# Technical User
+
+# Power User/Developer
+
+- Install Raspbian OS
+-- Ensure upto date
+--- apt-get update
+--- apt-get upgrade
+-- Install Dependencies
+--- python libraries
+---- pip xx
+- Clone MiFrame from GitHub
+-- git clone
+- Edit config.py
+- Setup services
+- Other setup tasks
+-- set default wallpaper to MiFrame Startup Image
+
+# Config.json Info
+- SSID, password
+- Unit type (frame only, server)
+- User definable settings
+-- portrait/landscape/both
+-- rotation speed
+-- categories
+
+wpa_suplicant.conf method
+https://www.seeedstudio.com/blog/2021/01/25/three-methods-to-configure-raspberry-pi-wifi/
+
+
+Empty Simple Flask Project with Notes.
 
 These are my notes on how to get a new project rolling.
 
