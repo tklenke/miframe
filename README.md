@@ -1,31 +1,21 @@
 # MiFrame Installation and Set-up
 
-# Non-Technical User (TODO)
-## Unit Set-up
-1. unbox and plug in
-1. on startup Raspbian Desktop wallpaper shows "please wait" until MiFrame starts
-    1. MiFrame-frame starts
-        1. Checks for config.json, if exists: then goes into normal start up
-        1. else: goes into set-up state
-    1. MiFrame-Server starts
-        1. Checks for config.json if exists: then goes into normal startup
-            1. if config.json unit type is frame then server shuts down
-            1. else: server starts normal operations
-        1. else: server goes into Set-up State
-            - Set-up State Flow
-                1. default wifi network ssid, password and URL displayed on Frame
-                1. user connects to default ssid and navigates to URL
-                1. user uses webUI to connect to users preferred network
-                1. Server saves connection information to disk
-                1. Reboot is scheduled
-1. on startup MiFrame shows connection information (URL) to server
-    - Welcome to MiFrame.  For photo controls visit http://url
+1. establish network connection
+1. user takes USB drive from frame, plugs into their desktop and loads photos into designated directory
+and replaces in USB drive frame and reboots 
+1. frame starts and looks config.json exists
+    - if found continues
+    - else scans network server and displays default images or startup screen
+1. server starts and looks for config.json
+    - if found, follows config.json for startup or shutdown (there's another server online)
+    - else, scans network for another server, 
+        - if found shutdown
+        - else look for photo directory
+            - if found, then do new server tasks
+            - else, shutdown
 
-
-# Technical User
 
 # Power User/Developer
-
 - Install Raspbian OS
 -- Ensure upto date
 --- apt-get update
@@ -35,14 +25,16 @@
 ---- pip xx
 - Clone MiFrame from GitHub
 -- git clone
+- setup directories
+- setup services
 - Edit config.py
 - Setup services
 - Other setup tasks
 -- set default wallpaper to MiFrame Startup Image
 
 # Config.json Info
-- SSID, password
 - Unit type (frame only, server)
+- server ip
 - User definable settings
 -- portrait/landscape/both
 -- rotation speed
