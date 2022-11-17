@@ -3,11 +3,11 @@
 1. establish network connection
 1. user takes USB drive from frame, plugs into their desktop and loads photos into designated directory
 and replaces in USB drive frame and reboots 
-1. frame starts and looks config.json exists
+1. frame starts and looks config exists
     - if found continues
     - else scans network server and displays default images or startup screen
-1. server starts and looks for config.json
-    - if found, follows config.json for startup or shutdown (there's another server online)
+1. server starts and looks for config
+    - if found, follows config for startup or shutdown (there's another server online)
     - else, scans network for another server, 
         - if found shutdown
         - else look for photo directory
