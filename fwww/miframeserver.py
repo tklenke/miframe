@@ -23,7 +23,6 @@ tStart = time.process_time()
 dtStart = datetime.datetime.now()
 #need this to flash messages
 szMachineId = selector.GetMachineId()
-
 app.secret_key = szMachineId
 
 #Initiate Save Globals
@@ -266,4 +265,7 @@ def savenow():
     return redirect(url_for('utilities'))
     
 
-    
+#-----client-server data exchange routes----------------
+@app.route("/chksrvr")
+def check_server():
+    return ('',202)    
