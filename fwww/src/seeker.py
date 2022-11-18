@@ -4,7 +4,6 @@ import time
 
 #setup
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
-MIFRAME_SERVER_PORT = 5000
 
 def GetMyIP():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -31,7 +30,7 @@ def CheckIPForMiFrameServer(szAddr,nPort):
         logging.debug(f"Unexpected Response: {data}")
         return(False)
 
-def ScanNetworkForMiFrameServer():
+def ScanNetworkForMiFrameServer(nPort = 5000):
     szMyIP = GetMyIP() 
 
     # from my IP and compose a base like 192.168.1.xxx
@@ -40,7 +39,7 @@ def ScanNetworkForMiFrameServer():
     
     for i in range(1, 255):
         szIP = f"{szBaseIP}{i}"
-        bR = CheckIPForMiFrameServer(szIP,MIFRAME_SERVER_PORT)
+        bR = CheckIPForMiFrameServer(szIP,nPort)
         if bR:
             return (szIP)
       

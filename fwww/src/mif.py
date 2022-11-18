@@ -7,6 +7,9 @@ import logging
 import datetime
 import uuid
 
+TS_EPOCH_DAY = 631170000.0
+PILLOW_IMAGE_BUF_SZ = 24000000
+
 #image record
 IR_PATH = 0
 #path

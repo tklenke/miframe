@@ -13,33 +13,32 @@
 ## Get Next Image
 
 #
-
-
-import config as mifcfg
+import configparser
 import time
 import io
 import os
 import json
-
+import logging
 #for html client
 import requests
-
-
+#for GUI
 from tkinter import *
 from tkinter import ttk
-
 #for photos
 #sudo pip install --upgrade pillow  (version 9.2 for dev)
 from PIL import Image, ImageTk, ImageFile
 from PIL.ExifTags import TAGS
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-
 #MiFrame Shared library
 from mif import ImageRecord
 import mif
+import seeker
 
+#basic setup
+logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
 
-
+cfg = configparser.ConfigParser()
+cfg.read(os.getenv('MIFRAME_INI', '/home/admin/projects/miframe/fwww/miframe.ini'))
 
 #--------functions
         
@@ -63,9 +62,9 @@ def CheckPhotoServer():
 ## Request Next Image Meta from PhotoServer
 ## Request Image from PhotoServer
     #get img record
-    image_record_url = "http://10.0.1.33:5000/selectir"
+    image_record_url = f"http://{g_ServerIP}:{g_ServerPort}/selectir"
     try:
-        r = requests.get(image_record_url)
+        r = requests.get(image_record_url,timeout=2)
     except:
         return(None,None)
     if r.status_code != 200:
@@ -74,9 +73,9 @@ def CheckPhotoServer():
     dDict = r.json()
     imgRec = ImageRecord(dAttr = dDict)
 
-    image_url = f"http://10.0.1.33:5000/{dDict['id']}/img"
+    image_url = f"http://{g_ServerIP}:{g_ServerPort}/{dDict['id']}/img"
     try:
-        r = requests.get(image_url)
+        r = requests.get(image_url,timeout=2)
     except:
         return(None,None)
     if r.status_code != 200:
@@ -106,10 +105,12 @@ def CheckFallBackFiles():
 def GetNextImage():
     (img, oImgMeta) = CheckPhotoServer()
     if img is not None:
+        logging.debug(f"server file")
         return (img, oImgMeta)
     #else
     (img, oImgMeta) = CheckFallBackFiles()
     if img is not None:
+        logging.debug(f"fallback file")
         return (img, oImgMeta)
     #else
     img = Image.open( g_photo_dir + "1x1white.png")
@@ -183,23 +184,32 @@ def SetScreenGlobals(width,height,corner_width,corner_height):
 
 class Photo(Frame):
     def __init__(self, parent, *args, **kwargs):
+        logging.debug(f"starting photo")
         self.parent=parent
+        self.fsparent = parent.parent
         Frame.__init__(self, parent, bg='black')
-        self.panel1 = Label(self, image=None, borderwidth=0, highlightthickness=0)
-        self.panel1.grid(column=0,row=0)
+        self.panel1 = Label(self, image=None, textvariable=self.fsparent.mainMsg, borderwidth=0,\
+            highlightthickness=0, font=('Helvetica', large_text_size), fg="white", bg="black",\
+            compuund=None)
+        self.panel1.grid(column=0,row=0, sticky=(S))
         self.flip()
     
     def flip(self):
+        if self.fsparent.mainMsg is None:
+            display_image = GetDisplayReadyImage()
 
-        display_image = GetDisplayReadyImage()
-
-        #show the photo
-        self.panel1.config(image=display_image)
-        self.panel1.image = display_image  
-        self.after(mifcfg.flip_after_millisecs, self.flip)    
+            #show the photo
+            self.panel1.config(image=display_image)
+            self.panel1.image = display_image
+        else:
+            self.panel1.config(image=None)
+            
+        self.after(cfg['FRAME']['flip_after_millisecs'], self.flip)
+        
 
 class Clock(Frame):
     def __init__(self, parent, *args, **kwargs):
+        logging.debug(f"starting clock")
         Frame.__init__(self, parent, bg='black')
         self.columnconfigure(0)
         # initialize time label
@@ -242,6 +252,7 @@ class Clock(Frame):
 
 class Blank(Frame):
     def __init__(self, parent, *args, **kwargs):
+        logging.debug(f"starting blank")
         Frame.__init__(self, parent, bg='black')
         self.title = ' ' 
         self.calendarLbl = Label(self, text=self.title, font=('Helvetica', large_text_size), fg="white", bg="black")
@@ -250,18 +261,23 @@ class Blank(Frame):
 class FullscreenWindow:
 
     def __init__(self):
+        logging.debug(f"starting fullscreenwindow")
+        global g_bServerLive, g_ServerIP, g_ServerPort
         self.tk = Tk()
         self.tk.configure(background='black',cursor="none")
         self.topFrame = Frame(self.tk, background = 'black')
         self.topFrame.parent = self
         self.topFrame.grid(sticky=(N,W,E,S))
 
-
         #set initial values
         self.state = False
         SetScreenGlobals(self.tk.winfo_screenwidth(), self.tk.winfo_screenheight(),large_text_size,large_text_size)
-        print(g_screen_width,g_screen_height,g_max_image_width,g_max_image_height)
-     
+        logging.debug(f"Screen Dims: {g_screen_width,g_screen_height,g_max_image_width,g_max_image_height}")
+
+        #set up runner and initial message
+        self.sRunner = 'init'
+        self.runner()
+
         #pad out screen
         self.topFrame.columnconfigure(0,minsize = g_corner_width)
         self.topFrame.columnconfigure(1,minsize = g_max_image_width)
@@ -285,8 +301,7 @@ class FullscreenWindow:
         self.blankTL.grid(column=0,row=0)
 
         self.blankBR = Blank(self.topFrame)
-        self.blankBR.grid(column=4,row=2)
-
+        self.blankBR.grid(column=4,row=2)  
 
         self.toggle_fullscreen()
 
@@ -300,12 +315,83 @@ class FullscreenWindow:
         self.tk.attributes("-fullscreen", False)
         exit()
         return "break"
+
+    def runner(self):
+        global g_bServerLive, g_ServerIP, g_ServerPort
+        if self.sRunner == 'init':
+            logging.debug(f"init")
+            self.mainMsg = StringVar()
+            self.mainMsg.set('Starting MiFrame...')
+            self.sRunner = 'server-unknown'
+            self.tk.after(1000, self.runner)
+            return()
+        elif self.sRunner == 'server-unknown':
+            logging.debug(f"server-unknown")
+            self.mainMsg.set(f"Checking for server {g_ServerIP}")
+            self.sRunner = 'server-check'
+            self.tk.after(1000, self.runner)
+            return()
+        elif self.sRunner == 'server-check':
+            logging.debug(f"server-check")
+            if seeker.CheckIPForMiFrameServer(g_ServerIP,g_ServerPort):
+                #it is live
+                g_bServerLive = True
+                # ~ self.mainMsg.set(None)
+                self.mainMsg = None
+                self.sRunner = 'nominal'
+                self.tk.after(10000, self.runner)
+                return()                
+            else:
+                g_bServerLive = False
+                self.mainMsg.set(f"Server {g_ServerIP} not found\rSearching Network...")
+                self.sRunner = 'server-search'
+                self.tk.after(100, self.runner)
+                return()
+        elif self.sRunner == 'server-search':
+            logging.debug(f"server-search")            
+            szIP = seeker.ScanNetworkForMiFrameServer(g_ServerPort)
+            if szIP is None:
+                g_bServerLive = False
+                self.mainMsg.set(f"No live server on network")
+            else:
+                g_bServerLive = True
+                g_ServerIP = szIP
+                self.mainMsg = None
+            #give nominal a chance to run
+            self.sRunner = 'nominal'
+            self.tk.after(100, self.runner)
+            return()
+        elif self.sRunner == 'nominal':
+            logging.debug(f"nominal")
+            #do maintenance tasks
+            
+            if g_bServerLive:
+                #all is truly nominal so check again in a minute
+                # ~ self.mainMsg.set(None)
+                self.mainMsg = None
+                self.sRunner = 'nominal'
+                self.tk.after(60000, self.runner)
+                return()                
+            else:
+                #server is offline so start the search
+                if self.mainMsg is None:
+                    self.mainMsg = StringVar()
+                self.mainMsg.set(f"Server {g_ServerIP} offline")
+                self.sRunner = 'server-check'
+                self.tk.after(100, self.runner)
+                return()                
+        #else
+        logging.error(f"runner in unexpected state {self.sRunner}")
+        self.tk.after(1000, self.runner)
         
 
 if __name__ == '__main__':
-    
+    if cfg['LEVEL']['debug']:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.ERROR)
+        
     #set up constants    
-
     ui_locale = '' # e.g. 'fr_FR' fro French, '' as default
     time_format = 12 # 12 or 24
     date_format = "%b %d, %Y" # check python doc for strftime() for options
@@ -315,16 +401,21 @@ if __name__ == '__main__':
     medium_text_size = 16
     small_text_size = 8
 
-    g_photo_dir = mifcfg.photo_fallback_path
+    g_photo_dir = cfg['PATHS']['photo_fallback_path']
     g_i_fallback = 0
+    
+    g_ServerIP = cfg['NETWORK']['server_ip']
+    g_ServerPort = cfg.getint('NETWORK','server_port')
+    g_bServerLive = False
 
     #build fallback list
-    print("building fallback list")
+    logging.debug(f"building fallback list")
     g_aFBRecs = []
     g_aFBRecs = ScanFallbackDir(g_aFBRecs)
-
+    
     #setup windows and begin event loop
     w = FullscreenWindow()
+    logging.debug(f"Done init")
     w.tk.mainloop()
 
 
