@@ -103,11 +103,13 @@ def CheckFallBackFiles():
     return(img,g_aFBRecs[g_i_fallback-1])
 
 def GetNextImage():
+    global g_bServerLive
     (img, oImgMeta) = CheckPhotoServer()
     if img is not None:
         logging.debug(f"server file")
         return (img, oImgMeta)
     #else
+    g_bServerLive = False
     (img, oImgMeta) = CheckFallBackFiles()
     if img is not None:
         logging.debug(f"fallback file")
@@ -186,25 +188,26 @@ class Photo(Frame):
     def __init__(self, parent, *args, **kwargs):
         logging.debug(f"starting photo")
         self.parent=parent
-        self.fsparent = parent.parent
         Frame.__init__(self, parent, bg='black')
-        self.panel1 = Label(self, image=None, textvariable=self.fsparent.mainMsg, borderwidth=0,\
+        self.panel1 = Label(self, image=None, textvariable=self.parent.parent.mainMsg, borderwidth=0,\
             highlightthickness=0, font=('Helvetica', large_text_size), fg="white", bg="black",\
             compuund=None)
         self.panel1.grid(column=0,row=0, sticky=(S))
         self.flip()
     
     def flip(self):
-        if self.fsparent.mainMsg is None:
+        if self.parent.parent.mainMsg.get() == '':
+            logging.debug(f"image[{self.parent.parent.mainMsg.get()}]")
             display_image = GetDisplayReadyImage()
 
             #show the photo
             self.panel1.config(image=display_image)
             self.panel1.image = display_image
         else:
+            logging.debug(f"text[{self.parent.parent.mainMsg.get()}]")
             self.panel1.config(image=None)
             
-        self.after(cfg['FRAME']['flip_after_millisecs'], self.flip)
+        self.after(cfg.getint('FRAME','flip_after_millisecs'), self.flip)
         
 
 class Clock(Frame):
@@ -258,6 +261,14 @@ class Blank(Frame):
         self.calendarLbl = Label(self, text=self.title, font=('Helvetica', large_text_size), fg="white", bg="black")
         self.calendarLbl.grid(column=0,row=0)
 
+class SystemMsg(Frame):
+    def __init__(self, parent, *args, **kwargs):
+        logging.debug(f"starting system msg")
+        Frame.__init__(self, parent, bg='black')
+        self.parent=parent
+        self.textmsgLbl = Label(self, textvariable=self.parent.parent.sysMsg, font=('Helvetica', medium_text_size), fg="white", bg="black")
+        self.textmsgLbl.grid(column=0,row=0)
+
 class FullscreenWindow:
 
     def __init__(self):
@@ -296,12 +307,12 @@ class FullscreenWindow:
         # Photo
         self.photo = Photo(self.topFrame)
         self.photo.grid(column=1,row=1,columnspan=2)
-        # Blanks
+        # Blank
         self.blankTL = Blank(self.topFrame)
         self.blankTL.grid(column=0,row=0)
-
-        self.blankBR = Blank(self.topFrame)
-        self.blankBR.grid(column=4,row=2)  
+        # Message
+        self.sysmsg = SystemMsg(self.topFrame)
+        self.sysmsg.grid(column=1,row=0,columnspan=2)
 
         self.toggle_fullscreen()
 
@@ -322,12 +333,14 @@ class FullscreenWindow:
             logging.debug(f"init")
             self.mainMsg = StringVar()
             self.mainMsg.set('Starting MiFrame...')
+            self.sysMsg = StringVar()
+            self.sysMsg.set('Starting MiFrame...')            
             self.sRunner = 'server-unknown'
-            self.tk.after(1000, self.runner)
+            self.tk.after(1500, self.runner)
             return()
         elif self.sRunner == 'server-unknown':
             logging.debug(f"server-unknown")
-            self.mainMsg.set(f"Checking for server {g_ServerIP}")
+            self.sysMsg.set(f"Checking for server {g_ServerIP}")
             self.sRunner = 'server-check'
             self.tk.after(1000, self.runner)
             return()
@@ -336,14 +349,15 @@ class FullscreenWindow:
             if seeker.CheckIPForMiFrameServer(g_ServerIP,g_ServerPort):
                 #it is live
                 g_bServerLive = True
-                # ~ self.mainMsg.set(None)
-                self.mainMsg = None
+                self.mainMsg.set('')
+                # ~ self.mainMsg = None
                 self.sRunner = 'nominal'
                 self.tk.after(10000, self.runner)
                 return()                
             else:
                 g_bServerLive = False
-                self.mainMsg.set(f"Server {g_ServerIP} not found\rSearching Network...")
+                self.mainMsg.set('')
+                self.sysMsg.set(f"Server {g_ServerIP} not found. Searching Network...")
                 self.sRunner = 'server-search'
                 self.tk.after(100, self.runner)
                 return()
@@ -352,11 +366,12 @@ class FullscreenWindow:
             szIP = seeker.ScanNetworkForMiFrameServer(g_ServerPort)
             if szIP is None:
                 g_bServerLive = False
-                self.mainMsg.set(f"No live server on network")
+                self.sysMsg.set(f"No live server on network")
             else:
                 g_bServerLive = True
                 g_ServerIP = szIP
-                self.mainMsg = None
+                # ~ self.mainMsg = None
+                self.mainMsg.set('')
             #give nominal a chance to run
             self.sRunner = 'nominal'
             self.tk.after(100, self.runner)
@@ -367,8 +382,9 @@ class FullscreenWindow:
             
             if g_bServerLive:
                 #all is truly nominal so check again in a minute
-                # ~ self.mainMsg.set(None)
-                self.mainMsg = None
+                self.mainMsg.set('')
+                self.sysMsg.set('')
+                # ~ self.mainMsg = None
                 self.sRunner = 'nominal'
                 self.tk.after(60000, self.runner)
                 return()                
@@ -376,7 +392,7 @@ class FullscreenWindow:
                 #server is offline so start the search
                 if self.mainMsg is None:
                     self.mainMsg = StringVar()
-                self.mainMsg.set(f"Server {g_ServerIP} offline")
+                self.sysMsg.set(f"Server {g_ServerIP} offline")
                 self.sRunner = 'server-check'
                 self.tk.after(100, self.runner)
                 return()                
@@ -386,7 +402,7 @@ class FullscreenWindow:
         
 
 if __name__ == '__main__':
-    if cfg['LEVEL']['debug']:
+    if cfg.getboolean('LEVEL','debug'):
         logging.getLogger().setLevel(logging.DEBUG)
     else:
         logging.getLogger().setLevel(logging.ERROR)
