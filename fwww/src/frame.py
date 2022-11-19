@@ -38,9 +38,28 @@ import seeker
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
 
 cfg = configparser.ConfigParser()
-cfg.read(os.getenv('MIFRAME_INI', '/home/admin/projects/miframe/fwww/miframe.ini'))
+g_szIniPath = os.getenv('MIFRAME_INI', '/home/admin/projects/miframe/fwww/miframe.ini')
+if not os.path.exists(g_szIniPath):
+    logging.critical(f"Can't find config file {g_szIniPath}")
+    exit()
+cfg.read(g_szIniPath)
 
 #--------functions
+
+def GetIniFromServer():
+    #get ini record
+    ini_url = f"http://{g_ServerIP}:{g_ServerPort}/{g_MachineID}/getini"
+    try:
+        r = requests.get(ini_url,timeout=2)
+    except:
+        return(None,None)
+    if r.status_code != 200:
+        return(None,None)
+
+    dDict = r.json()
+    for key in dDict.keys():
+        logging.debug(f"{key}{type(dDict[key])} {dDict[key]}")
+    return()
         
 def ScanFallbackDir(aFBRecs):
     if len(aFBRecs) > 0:
@@ -62,7 +81,8 @@ def CheckPhotoServer():
 ## Request Next Image Meta from PhotoServer
 ## Request Image from PhotoServer
     #get img record
-    image_record_url = f"http://{g_ServerIP}:{g_ServerPort}/selectir"
+    # ~ image_record_url = f"http://{g_ServerIP}:{g_ServerPort}/selectir"
+    image_record_url = f"http://{g_ServerIP}:{g_ServerPort}/{g_MachineID}/selectirmid"
     try:
         r = requests.get(image_record_url,timeout=2)
     except:
@@ -328,7 +348,7 @@ class FullscreenWindow:
         return "break"
 
     def runner(self):
-        global g_bServerLive, g_ServerIP, g_ServerPort
+        global g_bServerLive, g_ServerIP, g_ServerPort, g_IniDirty, g_szIniPath
         if self.sRunner == 'init':
             logging.debug(f"init")
             self.mainMsg = StringVar()
@@ -369,7 +389,10 @@ class FullscreenWindow:
                 self.sysMsg.set(f"No live server on network")
             else:
                 g_bServerLive = True
-                g_ServerIP = szIP
+                if szIP != g_ServerIP:
+                    g_ServerIP = szIP
+                    cfg['NETWORK']['server_ip'] = szIP
+                    g_IniDirty = True
                 # ~ self.mainMsg = None
                 self.mainMsg.set('')
             #give nominal a chance to run
@@ -378,17 +401,7 @@ class FullscreenWindow:
             return()
         elif self.sRunner == 'nominal':
             logging.debug(f"nominal")
-            #do maintenance tasks
-            
-            if g_bServerLive:
-                #all is truly nominal so check again in a minute
-                self.mainMsg.set('')
-                self.sysMsg.set('')
-                # ~ self.mainMsg = None
-                self.sRunner = 'nominal'
-                self.tk.after(60000, self.runner)
-                return()                
-            else:
+            if not g_bServerLive:
                 #server is offline so start the search
                 if self.mainMsg is None:
                     self.mainMsg = StringVar()
@@ -396,6 +409,27 @@ class FullscreenWindow:
                 self.sRunner = 'server-check'
                 self.tk.after(100, self.runner)
                 return()                
+            
+            #do maintenance tasks
+            #check server for ini changes
+            
+            if g_IniDirty:
+                logging.debug(f"Saving Ini File {g_szIniPath}")
+                if not 'VERSION' in cfg:
+                    cfg['VERSION'] = {}
+                cfg['VERSION']['timestamp'] = time.strftime("%a, %d %b %Y %H:%M:%S")
+                with open(g_szIniPath, 'w') as configfile:
+                    cfg.write(configfile)
+                g_IniDirty = False
+            
+            #all is truly nominal so check again in a minute
+            self.mainMsg.set('')
+            self.sysMsg.set('')
+            # ~ self.mainMsg = None
+            self.sRunner = 'nominal'
+            self.tk.after(60000, self.runner)
+            return()                
+
         #else
         logging.error(f"runner in unexpected state {self.sRunner}")
         self.tk.after(1000, self.runner)
@@ -423,6 +457,11 @@ if __name__ == '__main__':
     g_ServerIP = cfg['NETWORK']['server_ip']
     g_ServerPort = cfg.getint('NETWORK','server_port')
     g_bServerLive = False
+    
+    g_MachineID = mif.GetMachineId()
+    
+    #ini file changes need to be saved
+    g_IniDirty = False
 
     #build fallback list
     logging.debug(f"building fallback list")

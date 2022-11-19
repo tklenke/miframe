@@ -117,6 +117,10 @@ def selectirj():
     dDict['id'] = nId
     return jsonify(dDict)
 
+@app.route("/<string:machine_id>/selectirmid")
+def selectirmidj(machine_id):
+    return redirect(url_for('selectirj'))
+
 #--------image routes----------------    
 @app.route("/<int:img_id>/img")
 def getimage(img_id):
@@ -269,3 +273,11 @@ def savenow():
 @app.route("/chksrvr")
 def check_server():
     return ('',202)    
+
+@app.route("/<string:machine_id>/getini")
+def get_frame_ini(machine_id):
+    dDict={}
+    dDict['FRAME']={}
+    dDict['FRAME']['machine_id']=machine_id
+    return jsonify(dDict)
+    
