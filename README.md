@@ -16,19 +16,19 @@
     - python libraries
     - pip xx
 1. Install MiFrame 
-  - Clone MiFrame from GitHub  
+  - Clone MiFrame from GitHub
     `git clone https://github.com/tklenke/miframe --depth 1 --branch=master ~/miframe`
-  - Edit config file  
+  - Edit config file
     `mv ~/miframe/fwww/miframe.ini ~`
       - ensure [LEVEL] debug = False
       - edit [PATHS] photo_fallback_path = /home/[USER]/Pictures/  
           ensure paths end in '/' other paths are for server so don't change
 1. Setup services
-  - create frame service via:  
+  - create frame service via:
     `sudo systemctl --force --full edit miframe.service`  
-      and paste following:   
-      (note: [USER] is pi, so change if your user is different)
-`
+    and paste following (note: [USER] is pi, so change if your user is different):
+
+```
 [Unit]
 Description=MiFrame Client
 After=network.target multi-user.target graphical.target
@@ -44,14 +44,14 @@ ExecStart=/usr/bin/python /home/pi/miframe/fwww/src/frame.py
 
 [Install]
 WantedBy=graphical.target
-`
-  - Save it and reload all Systemd services via:  
+```
+  - Save it and reload all Systemd services via:
     `sudo systemctl daemon-reload`
-  - Enable autostart on boot of your new service via:  
+  - Enable autostart on boot of your new service via:
     `sudo systemctl enable miframe.service`
-  - View status of service via:  
+  - View status of service via:
     `sudo systemctl status miframe.service`
-  - View logs via:  
+  - View logs via:
     `journalctl -u miframe.service`
 
   - Other setup tasks
