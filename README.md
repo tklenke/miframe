@@ -1,5 +1,13 @@
 # MiFrame Installation and Set-up
 
+# Service Controls
+- Frame
+-- `sudo systemctl stop miframe`
+-- `sudo systemctl start miframe`
+-- `sudo systemctl status miframe`
+- Server
+
+
 1. establish network connection
 1. user takes USB drive from frame, plugs into their desktop and loads photos into designated directory
 and replaces in USB drive frame and reboots 
@@ -16,120 +24,65 @@ and replaces in USB drive frame and reboots
 
 
 # Power User/Developer
-- Install Raspbian OS
+1. Install Raspbian OS
 -- Ensure upto date
 --- apt-get update
 --- apt-get upgrade
 -- Install Dependencies
 --- python libraries
 ---- pip xx
+1. Install MiFrame 
 - Clone MiFrame from GitHub
--- git clone
-- setup directories
-- setup services
-- Edit config.py
-- Setup services
+ `git clone https://github.com/tklenke/miframe --depth 1 --branch=master ~/miframe`
+- Edit config file
+ `mv ~/miframe/fwww/miframe.ini ~`
+ -- ensure [LEVEL] debug = False
+ -- edit [PATHS] photo_fallback_path = /home/[USER]/Pictures/  
+ ensure paths end in '/' other paths are for server so don't change
+1. Setup services
+- create frame service via:
+ `sudo systemctl --force --full edit miframe.service`
+ and paste following: 
+ (note: [USER] is pi, so change if your user is different)
+`
+[Unit]
+Description=MiFrame Client
+After=network.target multi-user.target graphical.target
+
+[Service]
+user=pi
+Environment="DISPLAY=:0"
+Environment="MIFRAME_INI=/home/pi/miframe.ini"
+Environment="XAUTHORITY=/home/pi/.Xauthority"
+WorkingDirectory=/home/pi/miframe/fwww/src    
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/bin/python /home/pi/miframe/fwww/src/frame.py
+
+[Install]
+WantedBy=graphical.target
+`
+- Save it and reload all Systemd services via:
+`sudo systemctl daemon-reload`
+- Enable autostart on boot of your new service via:
+`sudo systemctl enable miframe.service`
+- View status of service via:
+`sudo systemctl status miframe.service`
+- View logs via:
+`journalctl -u miframe.service`
+
 - Other setup tasks
 -- set default wallpaper to MiFrame Startup Image
 
-# Config.json Info
-- Unit type (frame only, server)
-- server ip
-- User definable settings
--- portrait/landscape/both
--- rotation speed
--- categories
-
-wpa_suplicant.conf method
-https://www.seeedstudio.com/blog/2021/01/25/three-methods-to-configure-raspberry-pi-wifi/
 
 
-Empty Simple Flask Project with Notes.
 
-These are my notes on how to get a new project rolling.
 
-###server set up
-```
-sudo apt-get update
-sudo apt-get install python3-pip python3-dev nginx
-sudo pip3 install virtualenv
-sudo ufw allow 5000
-```
-remember to close down port 5000 when done debugging
-```
-sudo ufw delete allow 5000
-```
 
-###create a fork and clone the github repository
-on github, create a fork for the new project (based on this one, duh) 
-then clone that new project into a new directory
-##Make a copy of this as a new project
-```
-mkdir newproj
-cd newproj
-git clone --bare https://github.com/tklenke/SimplyEmptyFlask.git
-cd SimplyEmptyFlask.git
-git push --mirror https://github.com/tklenke/new-repository.git
-cd ..
-rm -rf SimplyEmptyFlask.git
-```
 
-In the new project, goto clone with HTTPS section and copy the url 
-```
-git clone https://github.com/tklenke/new-repository.git
-```
 
-###initial set python environment
-```
-virtualenv myprojectenv
-source myprojectenv/bin/activate
-pip install gunicorn flask
-```
 
-###install any python requirement packages
-* see the app for any requirements
 
-###run simpleapp.py with flask
-```
-cd fwww
-export FLASK_APP=simpleapp.py
-export FLASK_DEBUG=1
-flask run
-```
 
-###run simpleapp.py with gunicorn
-```
-gunicorn --bind 0.0.0.0:5000 wsgi:app
-```
 
-###install simpleapp as service
-* edit simpleapp.service
-  * change user
-  * edit paths
-```
-sudo cp /<path to>/simpleapp/server/simpleapp.service /etc/systemd/system/
-sudo systemctl start simpleapp
-sudo systemctl enable simpleapp
-sudo systemctl status simpleapp
-```
-
-###Configure NGinx
-```
-sudo cp /<path to>/simpleapp/server/simpleapp.nginx /etc/nginx/sites-available/simpleapp
-sudo ln -s /etc/nginx/sites-available/simpleapp /etc/nginx/sites-enabled
-sudo systemctl restart nginx
-sudo ufw allow 'Nginx Full'
-```
-
-###Notes
-Find gunicorn log in /
-
-###Items to change in new app
-* change .gitignore simpleappenv to newappenv
-* change simpleapp.py to newapp.py
-* change wsgi.py line from simpleapp to newapp
-* change simpleapp.server to newapp
-* change simpleapp.nginx to newapp
-* added server name or ip to newapp.nginx
 
 

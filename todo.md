@@ -35,8 +35,20 @@
 - Categories / People / Events / Places tagging
 
 
-### Random Notes
+# Random Notes
 - https://www.venturephotography.com/
+
+### Wireless LAN setup Info
+wpa_suplicant.conf method
+https://www.seeedstudio.com/blog/2021/01/25/three-methods-to-configure-raspberry-pi-wifi/
+
+### Config.json Info
+- Unit type (frame only, server)
+- server ip
+- User definable settings
+-- portrait/landscape/both
+-- rotation speed
+-- categories
 
 
 
