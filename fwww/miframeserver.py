@@ -279,5 +279,10 @@ def get_frame_ini(machine_id):
     dDict={}
     dDict['FRAME']={}
     dDict['FRAME']['machine_id']=machine_id
+    dDict['NETWORK']={}
+    dDict['NETWORK']['gate_addr']='10.0.1.1'
+    dDict['NETWORK']['portN']=400
+    dDict['TEST']={}
+    dDict['TEST']['portT']=400
     return jsonify(dDict)
     

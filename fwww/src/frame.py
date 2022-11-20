@@ -46,20 +46,50 @@ cfg.read(g_szIniPath)
 
 #--------functions
 
+def SaveIni():
+    logging.debug(f"Saving Ini File {g_szIniPath}")
+    if not 'VERSION' in cfg:
+        cfg['VERSION'] = {}
+    cfg['VERSION']['timestamp'] = time.strftime("%a, %d %b %Y %H:%M:%S")
+    with open(g_szIniPath, 'w') as configfile:
+        cfg.write(configfile)
+    g_IniDirty = False
+    return()
+    
+
+def UpdateCfgWithDict(d):
+    bDirty = False
+
+    for key in d.keys():
+        #top level
+        if key in cfg:
+            #check next level
+            for key2 in d[key]:
+                if key2 not in cfg[key] or str(d[key][key2]) != str(cfg[key][key2]):
+                    print("1",key,key2)
+                    cfg[key][key2] = str(d[key][key2])
+                    bDirty = True
+        else:
+            cfg[key] = {}
+            for key2 in d[key]:
+                print("1",key,key2)
+                cfg[key][key2] = str(d[key][key2])
+                bDirty = True
+    return(bDirty)
+
 def GetIniFromServer():
     #get ini record
     ini_url = f"http://{g_ServerIP}:{g_ServerPort}/{g_MachineID}/getini"
     try:
         r = requests.get(ini_url,timeout=2)
     except:
-        return(None,None)
+        return(None)
     if r.status_code != 200:
-        return(None,None)
+        return(None)
 
     dDict = r.json()
-    for key in dDict.keys():
-        logging.debug(f"{key}{type(dDict[key])} {dDict[key]}")
-    return()
+
+    return(dDict)
         
 def ScanFallbackDir(aFBRecs):
     if len(aFBRecs) > 0:
@@ -412,15 +442,9 @@ class FullscreenWindow:
             
             #do maintenance tasks
             #check server for ini changes
-            
-            if g_IniDirty:
-                logging.debug(f"Saving Ini File {g_szIniPath}")
-                if not 'VERSION' in cfg:
-                    cfg['VERSION'] = {}
-                cfg['VERSION']['timestamp'] = time.strftime("%a, %d %b %Y %H:%M:%S")
-                with open(g_szIniPath, 'w') as configfile:
-                    cfg.write(configfile)
-                g_IniDirty = False
+            dIni = GetIniFromServer()
+            if UpdateCfgWithDict(dIni):
+                SaveIni()
             
             #all is truly nominal so check again in a minute
             self.mainMsg.set('')
@@ -459,9 +483,7 @@ if __name__ == '__main__':
     g_bServerLive = False
     
     g_MachineID = mif.GetMachineId()
-    
-    #ini file changes need to be saved
-    g_IniDirty = False
+    g_IniDirty = False    
 
     #build fallback list
     logging.debug(f"building fallback list")
