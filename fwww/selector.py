@@ -1,4 +1,5 @@
-import src.config as mifcfg
+import configparser
+import os
 import csv
 import datetime, time
 import logging
@@ -13,6 +14,12 @@ from src.mif import ImageRecord, DictInc, LoadIRcsv, SaveIRcsv, GetMachineId
 #setup
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
 
+cfg = configparser.ConfigParser()
+g_szIniPath = os.getenv('MIFRAME_INI', '/home/admin/projects/miframe/fwww/miframe.ini')
+if not os.path.exists(g_szIniPath):
+    logging.critical(f"Can't find config file {g_szIniPath}")
+    exit()
+cfg.read(g_szIniPath)
 
 #load in csv file
 ## build list of photos/epoch day
@@ -40,7 +47,7 @@ def GetWeirdEpochDays(aImgRecs):
     fMean = stats.tmean(list(dED.values()))
     fStd = stats.tstd(list(dED.values()))
 
-    nOutlierThreshold = int(fMean + mifcfg.threshold_num_std_dev * fStd)
+    nOutlierThreshold = int(fMean + cfg.getfloat('ANALYZE','threshold_num_std_dev') * fStd)
     logging.debug(f"Mean:{fMean:.2f} Std Dev:{fStd:.2f}  Threshold:{nOutlierThreshold}")
     
     for key in dED.keys():
@@ -123,11 +130,11 @@ def Shuffle(aImgRecs):
 ##num upcoming year days
 ##num liked
 ##num favorties
-    nRandom = mifcfg.random_weight
-    nUnseen = mifcfg.unseen_weight
-    nUpcoming = mifcfg.upcoming_weight
-    nLiked = mifcfg.liked_weight
-    nFavorites = mifcfg.favorites_weight
+    nRandom = cfg.getint('SHUFFLE','random_weight')
+    nUnseen = cfg.getint('SHUFFLE','unseen_weight')
+    nUpcoming = cfg.getint('SHUFFLE','upcoming_weight')
+    nLiked = cfg.getint('SHUFFLE','liked_weight')
+    nFavorites = cfg.getint('SHUFFLE','favorites_weight')
     logging.debug(f"Shuffle weights Random:{nRandom} Unseen:{nUnseen} Upcoming:{nUpcoming} Liked: Favorites:{nFavorites}")
     
     aShuffleIds = []
@@ -235,7 +242,7 @@ if __name__ == '__main__':
     
     logging.getLogger().setLevel(logging.DEBUG)
     
-    aImageRecords = LoadIRcsv(mifcfg.image_records_file_read)
+    aImageRecords = LoadIRcsv(cfg.get('PATHS','image_records_file_read'))
     tLoad = time.process_time()
     logging.debug(f"Read {len(aImageRecords)} image records [{tLoad-tStart}]")
     
@@ -296,7 +303,7 @@ if __name__ == '__main__':
     logging.debug(f"Found {len(GetEditedSinceIds(aImageRecords,dtYesterday))} edited")
         
     tSaveS = time.process_time()
-    SaveIRcsv(mifcfg.image_records_file_read,aImageRecords,safe=True)
+    SaveIRcsv(cfg.get('PATHS','image_records_file_read'),aImageRecords,safe=True)
     tSave = time.process_time()
     logging.debug(f"Done saving [{tSave-tSaveS}]")
     

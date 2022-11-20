@@ -1,4 +1,10 @@
-# MiFrame Installation and Set-up
+# MiFrame
+
+Welcome to MiFrame, a client-server architecture for displaying your photo library.
+Hardware requirements are a Raspberry Pi with an external drive connected to a display.  
+System supports multiple MiFrames being served photos from a single MiFrame-Server.  
+Use your phone or other network device with a web browser to Liked, Blocked, or Rotated
+photos from your library.    
 
 # Service Controls
 - Frame
@@ -6,6 +12,8 @@
   - `sudo systemctl start miframe`
   - `sudo systemctl status miframe`
 - Server
+
+# MiFrame Installation and Set-up
 
 # Power User/Developer
 1. Install Raspbian OS
@@ -56,6 +64,44 @@ WantedBy=graphical.target
 
   - Other setup tasks
     - set default wallpaper to MiFrame Startup Image
+    
+    
+# MiFrame-Server Install
+1. Install MiFrame as noted above
+1. Set-up MiFrameServer
+- install UFW and configure  
+```
+sudo apt-get install ufw
+sudo ufw allow 80
+```
+- Set-up Service
+  - create frame service via:
+    `sudo systemctl --force --full edit miframeserver.service`  
+    and paste following (note: [USER] is pi, so change if your user is different):
+
+```
+[Unit]
+Description=MiFrame Server
+After=network.target
+
+[Service]
+user=pi
+Environment="MIFRAME_INI=/home/pi/miframe.ini"
+WorkingDirectory=/home/pi/miframe/fwww    
+ExecStartPre=/bin/sleep 7
+ExecStart=/usr/bin/flask run --host=0.0.0.0 --port=5000
+
+[Install]
+WantedBy=graphical.target
+```
+  - Save it and reload all Systemd services via:
+    `sudo systemctl daemon-reload`
+  - Enable autostart on boot of your new service via:
+    `sudo systemctl enable miframeserver.service`
+  - View status of service via:
+    `sudo systemctl status miframeserver.service`
+  - View logs via:
+    `journalctl -u miframeserver.service`
 
 
 # Aspirational Flow

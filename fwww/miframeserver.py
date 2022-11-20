@@ -1,36 +1,55 @@
 # app.py or app/__init__.py
 from flask import Flask, render_template, send_file, jsonify, redirect, url_for, flash
-import src.config as mifcfg
+import configparser
 import datetime, time
 import threading
 import selector
 import logging
 import io
+import os
 from PIL import Image, ImageTk, ImageFile
 
 
 #-----------------START UP Tasks--------------------
-app = Flask(__name__)
-app.config.from_object('config')
-app.config["DEBUG"]
+logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
+# Load MiFrame Configuration
+cfg = configparser.ConfigParser()
+g_szIniPath = os.getenv('MIFRAME_INI', '/home/admin/projects/miframe/fwww/miframe.ini')
+if not os.path.exists(g_szIniPath):
+    logging.critical(f"Can't find config file {g_szIniPath}")
+    exit()
+cfg.read(g_szIniPath)
 
-# Now we can access the configuration variables via app.config["VAR_NAME"].
+# Set Up Logging
+logging.info(f"log debug [{cfg.getboolean('LEVEL','debug')}]")
+logging.info(f"log www [{cfg.getboolean('LEVEL','wwwlog')}]")
+
+if cfg.getboolean('LEVEL','debug'):
+    logging.getLogger().setLevel(logging.DEBUG)
+else:
+    logging.getLogger().setLevel(logging.ERROR)
+# web server logs    
+flasklog = logging.getLogger('werkzeug')
+if cfg.getboolean('LEVEL','wwwlog'):
+    flasklog.setLevel(logging.INFO)
+else:
+    flasklog.setLevel(logging.ERROR)
+    
+
+# Misc Flags set
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-logging.getLogger().setLevel(logging.DEBUG)
 
 #Initiate Server Info
 tStart = time.process_time()
 dtStart = datetime.datetime.now()
-#need this to flash messages
-szMachineId = selector.GetMachineId()
-app.secret_key = szMachineId
+
 
 #Initiate Save Globals
 aDirtyIds = []
 dtLastSave = None
 
 #load the selector
-aImageRecords = selector.LoadIRcsv(mifcfg.image_records_file_read)
+aImageRecords = selector.LoadIRcsv(cfg.get('PATHS','image_records_file_read'))
 tLoad = time.process_time()
 logging.debug(f"Read {len(aImageRecords)} image records in {(tLoad-tStart):.4f} seconds")
 logging.debug(f"Shuffling image records")
@@ -40,21 +59,25 @@ logging.debug(f"Done shuffling image records in {(tShuffle-tLoad):.4f} seconds")
 aRecentImgIds = []
 
 #make sure photo_directory ends in '/'
-if mifcfg.photo_root_path[-1] != '/':
-    szPhotoRoot = mifcfg.photo_root_path + '/'
-else:
-    szPhotoRoot = mifcfg.photo_root_path
+szPhotoRoot = cfg.get('PATHS','photo_root_path')
+if szPhotoRoot[-1] != '/':
+    szPhotoRoot += '/'
 logging.info(f"Photo Library at: {szPhotoRoot}")
 
 
-
 #----------Main App--------------------
+app = Flask(__name__)
+# Now we can access the configuration variables via app.config["VAR_NAME"].
+app.config.from_object('config')
+app.config["DEBUG"]
+#need this to flash messages
+szMachineId = selector.GetMachineId()
+app.secret_key = szMachineId
+
 if __name__ == "__main__":
     #start main 
+    print("miframeserver __main__")
     app.run(host='0.0.0.0')
-
-
-
 
 #-------functions--------------------------------------------
 def GetServerStats():
@@ -86,7 +109,7 @@ def activate_recurring_job():
             global dtLastSave, aDirtyIds
             if len(aDirtyIds) > 0:
                 logging.debug(f"Save requested for {len(aDirtyIds)} ids")
-                (nRecs, nFileSz) = selector.SaveIRcsv(mifcfg.image_records_file_read,aImageRecords,safe=True)
+                (nRecs, nFileSz) = selector.SaveIRcsv(cfg.get('PATHS','image_records_file_read'),aImageRecords,safe=True)
                 dtLastSave = datetime.datetime.now()
                 logging.info(f"Save completed. {nRecs} records {nFileSz} bytes at {dtLastSave}")
                 aDirtyIds = []
@@ -261,7 +284,7 @@ def neighbors(img_id):
 @app.route("/savenow")
 def savenow():
     global dtLastSave, aDirtyIds
-    (nRecs, nFileSz) = selector.SaveIRcsv(mifcfg.image_records_file_read,aImageRecords,safe=True)
+    (nRecs, nFileSz) = selector.SaveIRcsv(cfg.get('PATHS','image_records_file_read'),aImageRecords,safe=True)
     flash(f"Save completed. {nRecs} records {nFileSz} bytes")
     dtLastSave = datetime.datetime.now()
     logging.info(f"Save completed. {nRecs} records {nFileSz} bytes at {dtLastSave}")
