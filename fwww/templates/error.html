@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{%  set page_title='Error' %}
+{% block content %}
+
+    <div class="row">
+      <div class="full column" style="margin-top: 40px">
+            <h3>Error</h3>
+              <p>An error occurred. Return <a href="{{ url_for('home') }}">home</a>
+              <p></p><code>{{error_msg}}</code>
+        </div>
+    </div>
+{% endblock %}

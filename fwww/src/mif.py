@@ -1,8 +1,20 @@
+#################################
+##  Project Utilities and Image Record Object
+##  class ImageRecord
+##  LoadIRcsv
+##  SaveIRcsv
+##  GetStandardDays
+##  DictInc
+##  GetMachineId
+##  CheckPathSlash
+##  BackupFile
+##################################
 from PIL import Image, ImageTk
 from PIL.ExifTags import TAGS
 import json
 import csv
 import os
+import shutil
 import logging
 import datetime
 import uuid
@@ -10,36 +22,36 @@ import uuid
 TS_EPOCH_DAY = 631170000.0
 PILLOW_IMAGE_BUF_SZ = 24000000
 
-#image record
-IR_PATH = 0
-#path
-IR_FILE_SZ = 1
-#filesz
-IR_FILE_DATE = 2
-#filedate
-IR_DATETIME_ORIG = 3
-#datetimeoriginal
-IR_DATETIME_DIG = 4
-#datetimedigitized
-IR_DATETIME = 5
-#datetime
-IR_MAKE = 6
-#make
-IR_MODEL = 7
-#model
-IR_EXIF_WIDTH = 8
-#exifimagewidth
-IR_EXIF_HEIGHT = 9
-#exifimageheight
-IR_EXIF_VER = 10
-#exifversion
-IR_ORIENTATION = 11
-#orientation
-#epoch Day
-IR_EPOCH_DAY = 12
-#year_day
-IR_YEAR_DAY = 13
-IR_NUM_FIELDS = 14
+# ~ #image record
+# ~ IR_PATH = 0
+# ~ #path
+# ~ IR_FILE_SZ = 1
+# ~ #filesz
+# ~ IR_FILE_DATE = 2
+# ~ #filedate
+# ~ IR_DATETIME_ORIG = 3
+# ~ #datetimeoriginal
+# ~ IR_DATETIME_DIG = 4
+# ~ #datetimedigitized
+# ~ IR_DATETIME = 5
+# ~ #datetime
+# ~ IR_MAKE = 6
+# ~ #make
+# ~ IR_MODEL = 7
+# ~ #model
+# ~ IR_EXIF_WIDTH = 8
+# ~ #exifimagewidth
+# ~ IR_EXIF_HEIGHT = 9
+# ~ #exifimageheight
+# ~ IR_EXIF_VER = 10
+# ~ #exifversion
+# ~ IR_ORIENTATION = 11
+# ~ #orientation
+# ~ #epoch Day
+# ~ IR_EPOCH_DAY = 12
+# ~ #year_day
+# ~ IR_YEAR_DAY = 13
+# ~ IR_NUM_FIELDS = 14
 
 
 class ImageRecord:
@@ -143,11 +155,21 @@ class ImageRecord:
             self.edited = GetAttrSafe(dAttr,'edited','datetime')
         else:
             self.path = path
-            if file_sz is not None:
-                self.file_sz = int(file_sz)
-            if file_date is not None:
-                self.dt = float(file_date)
-        
+            if file_sz is not None and file_date is not None:
+                d={}
+                d['file_sz'] = file_sz
+                d['dt'] = file_date
+                self.file_sz = GetAttrSafe(d,'file_sz','int')
+                self.dt = GetAttrSafe(d,'dt','datetime')
+            else:
+                if os.path.exists(path):
+                    stats = os.stat(path)
+                    d={}
+                    d['file_sz'] = stats.st_size
+                    d['dt'] = stats.st_mtime
+                    self.file_sz = GetAttrSafe(d,'file_sz','int')
+                    self.dt = GetAttrSafe(d,'dt','datetime')
+                    
         if self.dt is not None:
             if self.epoch_day is None or self.year_day is None:
                 self.PopStdDays()
@@ -361,3 +383,43 @@ def DictInc(d,k):
 def GetMachineId():
     #remove first 9 characters as that is generated from timestamp and we want non-changing portion
     return(str(uuid.uuid1())[9:])
+    
+def CheckPathSlash(szP):
+    #ensure path ends in slash
+    if szP[-1] != '/':
+        return(szP + '/')
+    else:
+        return(szP)
+        
+def BackupFile(szPath,szBackupPath):    
+    # Backup of file
+    # check to see if path exists
+    if not os.path.exists(szPath):
+        logging.warn(f"file {szPath} does not exists")
+        return (False)
+    # chomp to get directory
+    (szHead,szFile) = os.path.split(szPath)
+    # make a backup subdirectory
+    szBUDir = CheckPathSlash(szBackupPath)
+    if not os.path.exists(szBUDir):
+        os.mkdir(szBUDir)    
+    bSaved = False
+    n = 1
+    while not bSaved:
+        # add .1 to filename
+        szBUFilePath = szBUDir + szFile + f".{n}"
+        if not os.path.exists(szBUFilePath):
+            logging.debug(f"Backedup to {szBUFilePath}")
+            shutil.copy(szPath,szBUFilePath)
+            bSaved = True
+        else:
+            # add 1 and try again
+            n += 1
+    return(True)
+    
+def SplitToArray(s, c):
+    #split string s by character c and chomp spaces
+    a = s.split(c)
+    for i in range(0,len(a)):
+        a[i] = a[i].strip()
+    return(a)

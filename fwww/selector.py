@@ -1,3 +1,12 @@
+#######################################
+##  Select Random Images from Image Record csv
+##  Shuffle 
+##  GetBlockedIds(aImgRecs)
+##  GetFavoriteIds(aImgRecs)
+##  GetLikedIds(aImgRecs, nLikes)
+##  GetEditedSinceIds(aImgRecs, dt)
+##  GetUnseenRecentlyIds(aImgRecs, dt)
+#######################################
 import configparser
 import os
 import csv
@@ -11,16 +20,13 @@ import scipy.stats as stats
 #miframe specific includes
 from src.mif import ImageRecord, DictInc, LoadIRcsv, SaveIRcsv, GetMachineId
 
-#setup
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
-
 cfg = configparser.ConfigParser()
 g_szIniPath = os.getenv('MIFRAME_INI', '/home/admin/projects/miframe/fwww/miframe.ini')
 if not os.path.exists(g_szIniPath):
     logging.critical(f"Can't find config file {g_szIniPath}")
     exit()
-cfg.read(g_szIniPath)
-
+cfg.read(g_szIniPath)    
 #load in csv file
 ## build list of photos/epoch day
 ## get list of outlier epoch days
@@ -238,11 +244,12 @@ def Shuffle(aImgRecs):
 
 #----------MAIN------------    
 if __name__ == '__main__':
+    #setup
+    logging.getLogger().setLevel(logging.DEBUG)
+        
     tStart = time.process_time()
     
-    logging.getLogger().setLevel(logging.DEBUG)
-    
-    aImageRecords = LoadIRcsv(cfg.get('PATHS','image_records_file_read'))
+    aImageRecords = LoadIRcsv(cfg.get('PATHS','image_records_file'))
     tLoad = time.process_time()
     logging.debug(f"Read {len(aImageRecords)} image records [{tLoad-tStart}]")
     
@@ -303,7 +310,7 @@ if __name__ == '__main__':
     logging.debug(f"Found {len(GetEditedSinceIds(aImageRecords,dtYesterday))} edited")
         
     tSaveS = time.process_time()
-    SaveIRcsv(cfg.get('PATHS','image_records_file_read'),aImageRecords,safe=True)
+    SaveIRcsv(cfg.get('PATHS','image_records_file'),aImageRecords,safe=True)
     tSave = time.process_time()
     logging.debug(f"Done saving [{tSave-tSaveS}]")
     

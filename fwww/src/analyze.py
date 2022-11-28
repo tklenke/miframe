@@ -7,7 +7,6 @@ import logging
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
 #logging.getLogger().setLevel(logging.DEBUG)
 
-
 #for photos
 from PIL import Image, ImageTk
 from PIL.ExifTags import TAGS
@@ -41,10 +40,8 @@ def GetDirsOS(directory):
             continue
             
         if scan.is_dir():
-            if directory[-1] != '/':
-                newdir = directory + '/' + scan.name
-            else:
-                newdir = directory + scan.name
+            directory = mif.CheckPathSlash(directory)
+            newdir = directory + scan.name
             dirs.append(newdir)
             if mifcfg.recursive_dirs:
                 dirs = dirs + GetDirsOS(newdir)
@@ -77,18 +74,13 @@ if __name__ == '__main__':
 #read back
     tStart = time.process_time()
     
-
     #make sure photo_directory ends in '/'
-    if mifcfg.photo_root_path[-1] != '/':
-        g_szRootDir = mifcfg.photo_root_path + '/'
-    else:
-        g_szRootDir = mifcfg.photo_root_path
+    g_szRootDir = mif.CheckPathSlash(mifcfg.photo_root_path)
     g_nPhotoDirLen = len(g_szRootDir)
     #get list of directories via recursion
     logging.info(f"Scanning photo root directory: {g_szRootDir}")
     dirs = GetDirsOS(g_szRootDir)
 
-    
     #build array of image recs by scanning each directory for jpgs
     logging.info(f"Scanning {len(dirs)} directories for photos")
     aImageRecords = []
@@ -111,7 +103,6 @@ if __name__ == '__main__':
         if i % 1000 == 0:
             logging.info(f"Scanning imgs, {i} completed")
 
-
     #write records to csv file
     logging.info(f"saving records to {mifcfg.image_records_file_write}")
     with open(mifcfg.image_records_file_write, 'w') as csvfile:
@@ -120,7 +111,6 @@ if __name__ == '__main__':
             csvout.writerow(row)
             
     print(aImageRecords[1:10])
-    
     
     tEnd = time.process_time()
     logging.info(f"Elapsed Time:\t{tEnd-tStart}")

@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{%  set page_title='Test' %}
+{% block content %}
+    <div class="row">
+      <div class="six columns" style="margin-top: 40px">
+            <h3>Test</h3>
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+            Nullam ut neque a risus auctor bibendum sed eget mauris. 
+            </p>
+            <pre><div id="time"></div></pre>
+      </div>
+    </div>
+ 
+
+{% endblock %}
+{% block script %}
+    <script>
+    var i = false;
+    function update () {
+        const url = '/time'
+        fetch(url)
+        .then(response => response.json())  
+        .then(json => {
+            console.log(json);
+            i = json.status;
+            if (i) {
+                document.getElementById("time").innerHTML = ''.concat(json.timetxt," Done");
+            } else {
+                document.getElementById("time").innerHTML = json.timetxt;
+            }
+            
+        })
+    };
+        update();
+        var vTimerId = setInterval(
+            function () {
+                if (i) {
+                    clearInterval(vTimerId);
+                }
+                else {
+                    update();
+                }
+            }
+        , 1000);
+    </script>
+{% endblock %}
+

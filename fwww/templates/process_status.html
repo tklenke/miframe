@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="row">
+      <div class="eight columns" style="margin-top: 40px">
+            <h3>{{page_title}}</h3>
+            <h6 id="description">{{description}}</h6>
+            <code id="ticker">Started</code>
+            <pre><code id="statustxt"></code></pre>
+            <p><a href="{{url_for('get_a')}}">Get Array Now</a></p>
+      </div>
+    </div>
+{% endblock %}
+{% block script %}
+    <script>
+    var bDone = false;
+    var n = 0
+    function update () {
+        const url = "{{status_url}}";
+        var sTicker = "Running";
+        for (var i = 0; i <= n; i++) sTicker += '.';
+        n++;
+        if (n > 6) n = 0;
+        document.getElementById("ticker").innerHTML = sTicker;
+        fetch(url)
+        .then(response => response.json())  
+        .then(json => {
+            console.log(json);
+            bDone = json.done;
+            document.getElementById("statustxt").innerHTML = json.statustxt;
+            document.getElementById("description").innerHTML = json.description;
+        })
+    };
+        //update();
+        var vTimerId = setInterval(
+            function () {
+                if (bDone) {
+                    clearInterval(vTimerId);
+                    document.getElementById("ticker").innerHTML = "Complete";
+                }
+                else {
+                    update();
+                }
+            }
+        , 1000);
+    </script>
+{% endblock %}
+

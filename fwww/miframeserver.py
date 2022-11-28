@@ -1,18 +1,28 @@
 # app.py or app/__init__.py
-from flask import Flask, render_template, send_file, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, send_file, jsonify, redirect, url_for, flash, make_response
+from flask import appcontext_tearing_down
 import configparser
 import datetime, time
 import threading
-import selector
 import logging
 import io
 import os
+import multiprocessing
 from PIL import Image, ImageTk, ImageFile
-
+#MiFrame Modules
+import selector
+import librarian
+from src.mif import CheckPathSlash
+from mpwrapper import MifProcess
+#for testing
+from mpwrapper import TBuildList, TAddList, TUpdateList, T2xAddList
+g_a = TBuildList()
+nCounter = 0
+#end testing
 
 #-----------------START UP Tasks--------------------
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
-# Load MiFrame Configuration
+### Load MiFrame Configuration
 cfg = configparser.ConfigParser()
 g_szIniPath = os.getenv('MIFRAME_INI', '/home/admin/projects/miframe/fwww/miframe.ini')
 if not os.path.exists(g_szIniPath):
@@ -20,7 +30,7 @@ if not os.path.exists(g_szIniPath):
     exit()
 cfg.read(g_szIniPath)
 
-# Set Up Logging
+### Set Up Logging
 logging.info(f"log debug [{cfg.getboolean('LEVEL','debug')}]")
 logging.info(f"log www [{cfg.getboolean('LEVEL','wwwlog')}]")
 
@@ -28,7 +38,7 @@ if cfg.getboolean('LEVEL','debug'):
     logging.getLogger().setLevel(logging.DEBUG)
 else:
     logging.getLogger().setLevel(logging.ERROR)
-# web server logs    
+### web server logs    
 flasklog = logging.getLogger('werkzeug')
 if cfg.getboolean('LEVEL','wwwlog'):
     flasklog.setLevel(logging.INFO)
@@ -36,20 +46,20 @@ else:
     flasklog.setLevel(logging.ERROR)
     
 
-# Misc Flags set
+### Misc Flags set
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-#Initiate Server Info
+### Initiate Server Info
 tStart = time.process_time()
 dtStart = datetime.datetime.now()
 
 
-#Initiate Save Globals
+### Initiate Save Globals
 aDirtyIds = []
 dtLastSave = None
 
-#load the selector
-aImageRecords = selector.LoadIRcsv(cfg.get('PATHS','image_records_file_read'))
+### load the selector
+aImageRecords = selector.LoadIRcsv(cfg.get('PATHS','image_records_file'))
 tLoad = time.process_time()
 logging.debug(f"Read {len(aImageRecords)} image records in {(tLoad-tStart):.4f} seconds")
 logging.debug(f"Shuffling image records")
@@ -58,11 +68,12 @@ tShuffle = time.process_time()
 logging.debug(f"Done shuffling image records in {(tShuffle-tLoad):.4f} seconds")
 aRecentImgIds = []
 
-#make sure photo_directory ends in '/'
-szPhotoRoot = cfg.get('PATHS','photo_root_path')
-if szPhotoRoot[-1] != '/':
-    szPhotoRoot += '/'
+# make sure photo_directory ends in '/'
+szPhotoRoot = CheckPathSlash(cfg.get('PATHS','photo_root_path'))
 logging.info(f"Photo Library at: {szPhotoRoot}")
+
+### Initialize multiprocessing object
+mp = MifProcess()
 
 
 #----------Main App--------------------
@@ -98,6 +109,15 @@ def GetServerStats():
     dStats[''] = 'TBA'
     
     return (dStats)
+    
+def TransferData():
+    global mp, g_a, aImageRecords, aDirtyIds         
+    if mp.DataExists('a'): 
+        g_a = mp.GetArray('a')
+    if mp.DataExists('IRs'): 
+        aImageRecords = mp.GetArray('IRs')
+        #put one record in to force save
+        aDirtyIds.append(0)   
   
 
 #-----------------RECURRING TASKS----------------------------
@@ -106,17 +126,31 @@ def GetServerStats():
 def activate_recurring_job():
     def run_job():
         while True:
-            global dtLastSave, aDirtyIds
+            global dtLastSave, aDirtyIds, mp, g_a
+            logging.debug(f"Running recurring job")
             if len(aDirtyIds) > 0:
                 logging.debug(f"Save requested for {len(aDirtyIds)} ids")
-                (nRecs, nFileSz) = selector.SaveIRcsv(cfg.get('PATHS','image_records_file_read'),aImageRecords,safe=True)
+                (nRecs, nFileSz) = selector.SaveIRcsv(cfg.get('PATHS','image_records_file'),aImageRecords,safe=True)
                 dtLastSave = datetime.datetime.now()
                 logging.info(f"Save completed. {nRecs} records {nFileSz} bytes at {dtLastSave}")
                 aDirtyIds = []
-            time.sleep(600)
+            #in case user moves away from long running process and does not allow to complete
+            #clean it up.
+            if mp.process is not None:
+                if mp.IsAlive():
+                    logging.debug(f"mp process alive")
+                else:
+                    logging.debug(f"mp process not alive. blocking")
+                    mp.Close()
+                    TransferData()
+                    logging.debug(f"mp process not alive. released")
+            logging.debug(f"Done recurring job")
+            time.sleep(60)
 
     thread = threading.Thread(target=run_job)
     thread.start()
+
+    
 
 #-----------------ROUTES-------------------------------------
 @app.route("/")
@@ -150,6 +184,9 @@ def getimage(img_id):
     if img_id not in range(0,len(aImageRecords)):
         return make_response(render_template('error.html'), 404)
     fullpath = szPhotoRoot + aImageRecords[img_id].path
+    if not os.path.exists(fullpath):
+        logging.error(f"could not find image {fullpath}")
+        return make_response(render_template('error.html'), 404)
     return send_file(fullpath,"image/jpeg")
 
 @app.route("/<int:img_id>_<int:width>x<int:height>/thumb")
@@ -242,7 +279,6 @@ def block(img_id):
     flash(f"Image: {img_id} Blocked")
     return redirect(url_for('neighbors',img_id=img_id))
 
-    
 #-----utility routes----------------
 @app.route("/utilities")
 def utilities():
@@ -284,7 +320,7 @@ def neighbors(img_id):
 @app.route("/savenow")
 def savenow():
     global dtLastSave, aDirtyIds
-    (nRecs, nFileSz) = selector.SaveIRcsv(cfg.get('PATHS','image_records_file_read'),aImageRecords,safe=True)
+    (nRecs, nFileSz) = selector.SaveIRcsv(cfg.get('PATHS','image_records_file'),aImageRecords,safe=True)
     flash(f"Save completed. {nRecs} records {nFileSz} bytes")
     dtLastSave = datetime.datetime.now()
     logging.info(f"Save completed. {nRecs} records {nFileSz} bytes at {dtLastSave}")
@@ -303,9 +339,68 @@ def get_frame_ini(machine_id):
     dDict['FRAME']={}
     dDict['FRAME']['machine_id']=machine_id
     dDict['NETWORK']={}
-    dDict['NETWORK']['gate_addr']='10.0.1.1'
-    dDict['NETWORK']['portN']=400
-    dDict['TEST']={}
-    dDict['TEST']['portT']=400
     return jsonify(dDict)
+
+#-----photo librarian routes----------------
+@app.route("/rundbmx")
+def run_db_mx():
+    return render_template('process_status.html',page_title='Database Maintenance',\
+        description='Database Maintenance', status_url=url_for('status_mp'))
+        
+@app.route("/importphotos")
+def import_photos():
+    return render_template('process_status.html',page_title='Import Photos',\
+        description='Import Photos', status_url=url_for('status_mp'))
+        
     
+@app.route("/statusmp")
+def status_mp():
+    global mp, g_a, aImageRecords
+    d={}
+    d['description'] = mp.description
+    if mp.IsAlive():
+        msg = ""
+        while (True):
+            msg_next = mp.Get()
+            if msg_next:
+                if msg_next[:len('[H]')] == '[H]':
+                    mp.description = msg_next[len('[H]'):]
+                else:
+                    msg += f"\t[{msg_next}]\n"
+            else:
+                break
+        if msg == "":
+            msg = "\tWorking...\n"
+        d['statustxt'] = f"Latest Status:\n{msg}"
+        d['done'] = False
+    else:
+        mp.Close()
+        TransferData()
+        d['statustxt'] = f"Final Status:\n\tDone."
+        d['done'] = True
+    logging.debug(f"len array {len(g_a)}")
+    return jsonify(d)
+
+@app.route("/testmp")
+def test_mp():
+    global mp, g_a
+    if mp.IsAlive():
+        return make_response(render_template('error.html',error_msg='Cannot start process twice.' ), 400)
+    logging.debug(f"len array {len(g_a)}")
+    pa = mp.NewList('a',g_a)
+    mp.SetFunction(T2xAddList,"2x Add to List")
+    mp.SetArgs((pa,3))
+    mp.Start()
+    return render_template('process_status.html',page_title='TAdd',description=mp.description,\
+        status_url=url_for('status_mp'))
+
+
+@app.route("/geta")
+def get_a():
+    global g_a
+    d={}
+    d['msg']=f"len array {len(g_a)}"
+    d['a'] =g_a
+    logging.debug(f"len array {len(g_a)}")
+    return jsonify(d)
+
