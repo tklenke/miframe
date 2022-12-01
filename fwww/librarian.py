@@ -16,6 +16,7 @@ import configparser
 import time
 import logging
 import os
+import shutil
 from PIL import Image, ImageTk
 from PIL.ExifTags import TAGS
 from src.mif import ImageRecord, BackupFile, SplitToArray, LoadIRcsv, SaveIRcsv, CheckPathSlash
@@ -76,16 +77,24 @@ def GetImagePathsFromDirectory(directory):
 
 
 #-------Exported Functions--------------
-def RemoveBrokenLinksIRcsv( aImgRecs, szPhotoRoot ):
+def RemoveBrokenLinksIRcsv( aImgRecs, szPhotoRoot, mpQueue = None ):
     #check each image record path exists in szPhotoRoot and if not remove from IRcsv
     nBefore = len(aImgRecs)
     szPhotoRoot = CheckPathSlash(szPhotoRoot)
     
-    for r in aImgRecs:
+    aRemoveIds = []
+    for i in range(0,len(aImgRecs)):
+        if (i % 2500) == 0:
+            Puts(f"Scanning Records {round(i/nBefore*100,1)}% done", mpQueue)
         #check to see if file exists
-        if not os.path.exists(szPhotoRoot + r.path):
-            logging.debug(f"Removing {r.path} from image records")
-            aImgRecs.remove(r)
+        if not os.path.exists(szPhotoRoot + aImgRecs[i].path):
+            aRemoveIds.insert(0,i)
+            logging.debug(f"Id{i} path broken")
+    
+    #remove r in aImgRecs was not working with a list.  got a not found error so did this hack        
+    for i in aRemoveIds:
+        logging.debug(f"Id{i} removed")
+        aImgRecs.pop(i)
         
     logging.debug(f"Image Records: Before {nBefore} After {len(aImgRecs)} grooming")
     return(aImgRecs)
@@ -138,24 +147,93 @@ def GetNewImgRecsFromPaths( aNewImgPaths, szPhotoRoot, mpQueue = None ):
         r.path = r.path[nPRLen:]
         aImgRecs.append(r)
     return(aImgRecs)
+    
+def MoveImageFilesToPhotoRoot( szPhotoRoot, szImportDir, mpQueue = None ):
+    szPhotoRoot = CheckPathSlash(szPhotoRoot)
+    szImportDir = CheckPathSlash(szImportDir)
+    nLenID = len(szImportDir)
+    # find new directory
+    bFound = False
+    n = 0
+    while not bFound:
+        # add 1 to dirname
+        szNewFileDir = szPhotoRoot + f"{n:04d}"
+        logging.debug(f"trying {szNewFileDir}")
+        if not os.path.exists(szNewFileDir):
+            logging.debug(f"Making directory {szNewFileDir}")
+            os.mkdir(szNewFileDir)
+            bFound = True
+        else:
+            # add 1 and try again
+            n += 1
+    szNewFileDir = CheckPathSlash(szNewFileDir)
+    logging.debug(f"s:{szImportDir} d:{szNewFileDir}")
+    Puts(f"[R]Moving photos to {szNewFileDir}")
+    aDirEntries = os.scandir(szImportDir)
+    for entry in aDirEntries:
+        szDest = szNewFileDir + entry.path[nLenID:]
+        logging.debug(f"moving s:{entry.path} d:{szDest}")
+        shutil.move(entry.path, szDest)
+    return(szNewFileDir)
+    
 
-def testloop(q):
-    Puts("starting",q)
-    i = 1
-    while i:
-        puts(str(i),q)
-        time.sleep(.1)
-        i += 1
-        if i > 4:
-            i = False
-    puts("done",q)
-    return()
+def DatabaseMaintenance( aImgRecs, n, mpQueue = None ):
+    ### find all the issues
+    ## find and remove broken links (image file deleted on disk but not in database
+    Puts(f"[H]Remove Broken Links",mpQueue)
+    Puts(f"Removing broken links. Starting...",mpQueue)
+    nLenBefore = len(aImgRecs)
+    RemoveBrokenLinksIRcsv(aImgRecs,cfg.get('PATHS','photo_root_path'),mpQueue)
+    Puts(f"[R]Found {nLenBefore-len(aImgRecs)} broken links. {len(aImgRecs)} records remaining",mpQueue)
+
+    Puts(f"[H]Seek Orphaned Photos",mpQueue)
+    Puts(f"Seeking orphaned photos. Starting...",mpQueue)    
+    aNewImages = VerifyIRcsvToPhotoDir(aImgRecs,cfg.get('PATHS','photo_root_path'),mpQueue)
+    Puts(f"[R]Found {len(aNewImages)} images not in database.",mpQueue)
+    
+    ## find orphan images (image file on disk but not in database)
+    ## update orphans with image data (slow)
+    Puts(f"[H]Getting image data",mpQueue)
+    Puts(f"Getting image data. Starting...",mpQueue)    
+    aNewIRs = GetNewImgRecsFromPaths(aNewImages,cfg.get('PATHS','photo_root_path'))
+    aImgRecs += aNewIRs
+    Puts(f"[R]Added {len(aNewIRs)} images to database",mpQueue)
+    
+    # if issues found, back up the image rec file and save new
+    
+def ImportPhotos( aImgRecs, n, mpQueue = None ):
+    ### get list of photo paths to import
+    ### make new subdirectory in photo root
+    ### move each file to new location, adding to list of new photos
+    ### make new image records
+    ### add new image records to database
+    Puts(f"[H]Looking for New Photos",mpQueue)
+    Puts(f"Looking for new photos. Starting...",mpQueue)
+    nLenBefore = len(aImgRecs)
+    aImportImgs = GetImagePathsFromDirectory(cfg.get('PATHS','import_photo_path'))
+    nImport = len(aImportImgs)
+    if nImport == 0:
+        Puts(f"[R]Found no images for importing in {cfg.get('PATHS','import_photo_path')}",mpQueue)
+        return
+    Puts(f"[R]Found {len(aImportImgs)} images for importing",mpQueue)
+ 
+    Puts(f"[H]Moving Photo files",mpQueue)
+    Puts(f"Moving photo files. Starting...",mpQueue)    
+    szNewImageDir = MoveImageFilesToPhotoRoot(cfg.get('PATHS','photo_root_path'),cfg.get('PATHS','import_photo_path'), mpQueue)
+    Puts(f"[H]Getting Image Data", mpQueue)
+    Puts(f"[H]Getting Image Data. Starting...", mpQueue)
+    aImportImgPaths = GetImagePathsFromDirectory(szNewImageDir)
+    if (nImport != len(aImportImgPaths)):
+        logging.error(f"Possible move error to {szNewImageDir}. Expected {nImport} found {len(aImportImgPaths)} records")
+    aNewIRs = GetNewImgRecsFromPaths(aImportImgPaths,cfg.get('PATHS','photo_root_path'))
+    aImgRecs += aNewIRs
+    Puts(f"[R]Added {len(aNewIRs)} images to database",mpQueue)
     
 #----------MAIN------------    
 if __name__ == '__main__':
     #setup
     logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
-    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.DEBUG)
         
     tStart = time.process_time()
 
@@ -165,28 +243,36 @@ if __name__ == '__main__':
 
     # ~ testloop(q)
 
-    szBUPath = CheckPathSlash(cfg.get('PATHS','miframe_etc_path')) + 'backup/'    
-    BackupFile(cfg.get('PATHS','image_records_file'),szBUPath)
+    # ~ szBUPath = CheckPathSlash(cfg.get('PATHS','miframe_etc_path')) + 'backup/'    
+    # ~ BackupFile(cfg.get('PATHS','image_records_file'),szBUPath)
     
     aImageRecords = LoadIRcsv(cfg.get('PATHS','image_records_file'))
     tLoad = time.process_time()
-    logging.debug(f"Load Time:\t{tLoad-tStart}")
+    logging.info(f"Load Time:\t{tLoad-tStart}")
     
-    aImageRecords = RemoveBrokenLinksIRcsv(aImageRecords,cfg.get('PATHS','photo_root_path'))
+    # ~ DatabaseMaintenance(aImageRecords)
+    # ~ tGroom = time.process_time()
+    # ~ logging.info(f"Groom Time:\t{tGroom-tLoad}")
+    
+    ImportPhotos(aImageRecords, 0)
     tGroom = time.process_time()
-    logging.debug(f"Groom Time:\t{tGroom-tLoad}")
+    logging.info(f"Import Time:\t{tGroom-tLoad}")    
     
-    aNewImages = ['/media/sf_Our_Pictures/test/dscf0010.jpg', '/media/sf_Our_Pictures/test/GatheringStorm.jpg', '/media/sf_Our_Pictures/test/IMG_0026.jpg', '/media/sf_Our_Pictures/test/IMG_1681.JPG', '/media/sf_Our_Pictures/test/IMG_4550.JPG', '/media/sf_Our_Pictures/test/LandOfTheFreeManzanarBasketball.jpg', '/media/sf_Our_Pictures/test/Polaris.jpg', '/media/sf_Our_Pictures/test/PyramidsAndPolygons.jpg', '/media/sf_Our_Pictures/test/Serenity.jpg', '/media/sf_Our_Pictures/test/StargazingAtHarmonyBoraxWorks.jpg', '/media/sf_Our_Pictures/test/SteppingStones.jpg']
+    # ~ aImageRecords = RemoveBrokenLinksIRcsv(aImageRecords,cfg.get('PATHS','photo_root_path'))
+    # ~ tGroom = time.process_time()
+    # ~ logging.debug(f"Groom Time:\t{tGroom-tLoad}")
+    
+    # ~ aNewImages = ['/media/sf_Our_Pictures/test/dscf0010.jpg', '/media/sf_Our_Pictures/test/GatheringStorm.jpg', '/media/sf_Our_Pictures/test/IMG_0026.jpg', '/media/sf_Our_Pictures/test/IMG_1681.JPG', '/media/sf_Our_Pictures/test/IMG_4550.JPG', '/media/sf_Our_Pictures/test/LandOfTheFreeManzanarBasketball.jpg', '/media/sf_Our_Pictures/test/Polaris.jpg', '/media/sf_Our_Pictures/test/PyramidsAndPolygons.jpg', '/media/sf_Our_Pictures/test/Serenity.jpg', '/media/sf_Our_Pictures/test/StargazingAtHarmonyBoraxWorks.jpg', '/media/sf_Our_Pictures/test/SteppingStones.jpg']
 
-    aNewImages = VerifyIRcsvToPhotoDir(aImageRecords,cfg.get('PATHS','photo_root_path'))
-    tVerify = time.process_time()
-    logging.debug(f"New Images Found:\t{len(aNewImages)}")
-    logging.debug(f"Verify Time:\t{tVerify-tGroom}")
+    # ~ aNewImages = VerifyIRcsvToPhotoDir(aImageRecords,cfg.get('PATHS','photo_root_path'))
+    # ~ tVerify = time.process_time()
+    # ~ logging.debug(f"New Images Found:\t{len(aNewImages)}")
+    # ~ logging.debug(f"Verify Time:\t{tVerify-tGroom}")
     
-    aNewIRs = GetNewImgRecsFromPaths(aNewImages,cfg.get('PATHS','photo_root_path'))
-    aImageRecords += aNewIRs
-    tNewRecs = time.process_time()
-    logging.debug(f"New Records Time:\t{tNewRecs - tVerify}")
+    # ~ aNewIRs = GetNewImgRecsFromPaths(aNewImages,cfg.get('PATHS','photo_root_path'))
+    # ~ aImageRecords += aNewIRs
+    # ~ tNewRecs = time.process_time()
+    # ~ logging.debug(f"New Records Time:\t{tNewRecs - tVerify}")
     
     # ~ for r in aNewIRs:
         # ~ print(r)
@@ -195,8 +281,8 @@ if __name__ == '__main__':
     nRec = 0; nFSize = 0
     # ~ (nRec, nFSize) = SaveIRcsv(cfg.get('PATHS','image_records_file'), aImageRecords, safe=False)
     tSave = time.process_time()    
-    logging.debug(f"Records Saved {nRec} File Size {nFSize} bytes")
-    logging.debug(f"Save Time:\t{tSave - tNewRecs}")
+    logging.info(f"Records Saved {nRec} File Size {nFSize} bytes")
+    # ~ logging.debug(f"Save Time:\t{tSave - tNewRecs}")
     
     tEnd = time.process_time()
     logging.info(f"Elapsed Time:\t{tEnd-tStart}")

@@ -11,8 +11,8 @@ import multiprocessing
 from PIL import Image, ImageTk, ImageFile
 #MiFrame Modules
 import selector
-import librarian
-from src.mif import CheckPathSlash
+from librarian import DatabaseMaintenance, ImportPhotos
+from src.mif import CheckPathSlash, BackupFile
 from mpwrapper import MifProcess
 #for testing
 from mpwrapper import TBuildList, TAddList, TUpdateList, T2xAddList
@@ -114,11 +114,11 @@ def TransferData():
     global mp, g_a, aImageRecords, aDirtyIds         
     if mp.DataExists('a'): 
         g_a = mp.GetArray('a')
-    if mp.DataExists('IRs'): 
+    if mp.DataExists('IRs'):
+        b = True 
         aImageRecords = mp.GetArray('IRs')
         #put one record in to force save
         aDirtyIds.append(0)   
-  
 
 #-----------------RECURRING TASKS----------------------------
 #starts with first request, then re-runs indefinately
@@ -129,8 +129,10 @@ def activate_recurring_job():
             global dtLastSave, aDirtyIds, mp, g_a
             logging.debug(f"Running recurring job")
             if len(aDirtyIds) > 0:
+                nRecs = 0
+                nFileSz = 0
                 logging.debug(f"Save requested for {len(aDirtyIds)} ids")
-                (nRecs, nFileSz) = selector.SaveIRcsv(cfg.get('PATHS','image_records_file'),aImageRecords,safe=True)
+                # ~ (nRecs, nFileSz) = selector.SaveIRcsv(cfg.get('PATHS','image_records_file'),aImageRecords,safe=True)
                 dtLastSave = datetime.datetime.now()
                 logging.info(f"Save completed. {nRecs} records {nFileSz} bytes at {dtLastSave}")
                 aDirtyIds = []
@@ -317,6 +319,13 @@ def neighbors(img_id):
         aIds.append(i)
     return render_template('list.html',page_title=f"Neighbors:{img_id}",aids=aIds)
     
+@app.route("/backupdb")
+def backup_db():
+    szBUPath = CheckPathSlash(cfg.get('PATHS','miframe_etc_path')) + 'backup/'    
+    szFile = BackupFile(cfg.get('PATHS','image_records_file'),szBUPath)
+    flash(f"Backed up database to {szFile}")
+    return redirect(url_for('utilities'))
+
 @app.route("/savenow")
 def savenow():
     global dtLastSave, aDirtyIds
@@ -324,6 +333,14 @@ def savenow():
     flash(f"Save completed. {nRecs} records {nFileSz} bytes")
     dtLastSave = datetime.datetime.now()
     logging.info(f"Save completed. {nRecs} records {nFileSz} bytes at {dtLastSave}")
+    aDirtyIds = []
+    return redirect(url_for('utilities'))
+    
+@app.route("/reloaddb")
+def reload_db():
+    aImageRecords = selector.LoadIRcsv(cfg.get('PATHS','image_records_file'))
+    flash(f"Reloaded database. {len(aImageRecords)} records")
+    logging.debug(f"Read {len(aImageRecords)} image records")
     aDirtyIds = []
     return redirect(url_for('utilities'))
     
@@ -342,45 +359,6 @@ def get_frame_ini(machine_id):
     return jsonify(dDict)
 
 #-----photo librarian routes----------------
-@app.route("/rundbmx")
-def run_db_mx():
-    return render_template('process_status.html',page_title='Database Maintenance',\
-        description='Database Maintenance', status_url=url_for('status_mp'))
-        
-@app.route("/importphotos")
-def import_photos():
-    return render_template('process_status.html',page_title='Import Photos',\
-        description='Import Photos', status_url=url_for('status_mp'))
-        
-    
-@app.route("/statusmp")
-def status_mp():
-    global mp, g_a, aImageRecords
-    d={}
-    d['description'] = mp.description
-    if mp.IsAlive():
-        msg = ""
-        while (True):
-            msg_next = mp.Get()
-            if msg_next:
-                if msg_next[:len('[H]')] == '[H]':
-                    mp.description = msg_next[len('[H]'):]
-                else:
-                    msg += f"\t[{msg_next}]\n"
-            else:
-                break
-        if msg == "":
-            msg = "\tWorking...\n"
-        d['statustxt'] = f"Latest Status:\n{msg}"
-        d['done'] = False
-    else:
-        mp.Close()
-        TransferData()
-        d['statustxt'] = f"Final Status:\n\tDone."
-        d['done'] = True
-    logging.debug(f"len array {len(g_a)}")
-    return jsonify(d)
-
 @app.route("/testmp")
 def test_mp():
     global mp, g_a
@@ -389,11 +367,73 @@ def test_mp():
     logging.debug(f"len array {len(g_a)}")
     pa = mp.NewList('a',g_a)
     mp.SetFunction(T2xAddList,"2x Add to List")
-    mp.SetArgs((pa,3))
+    mp.SetArgs((pa,.5))
     mp.Start()
     return render_template('process_status.html',page_title='TAdd',description=mp.description,\
         status_url=url_for('status_mp'))
 
+@app.route("/rundbmx")
+def run_db_mx():
+    global mp
+    if mp.IsAlive():
+        return make_response(render_template('error.html',error_msg='Cannot start process twice.' ), 400)
+    logging.debug(f"len array {len(aImageRecords)}")
+    pIRs = mp.NewList('IRs',aImageRecords)
+    logging.debug(f"{type(pIRs)}")
+    mp.SetFunction(DatabaseMaintenance,"Database Maintenance")
+    mp.SetArgs((pIRs,len(pIRs)))
+    mp.Start()
+    return render_template('process_status.html',page_title='Database Maintenance',\
+        description='Database Maintenance', status_url=url_for('status_mp'))
+        
+@app.route("/importphotos")
+def import_photos():
+    global mp
+    if mp.IsAlive():
+        return make_response(render_template('error.html',error_msg='Cannot start process twice.' ), 400)
+    pIRs = mp.NewList('IRs',aImageRecords)
+    logging.debug(f"{type(pIRs)}")
+    mp.SetFunction(ImportPhotos,"Import Photos")
+    mp.SetArgs((pIRs,len(pIRs)))
+    mp.Start()
+    return render_template('process_status.html',page_title='Import Photos',\
+        description='Import Photos', status_url=url_for('status_mp'))
+        
+@app.route("/statusmp")
+def status_mp():
+    global mp, g_a, aImageRecords
+    d={}
+    # get the message text from the queue
+    msg = ""
+    while (True):
+        msg_next = mp.Get()
+        if msg_next:
+            if msg_next[:len('[H]')] == '[H]':
+                mp.description = msg_next[len('[H]'):]
+            elif msg_next[:len('[R]')] == '[R]':
+                mp.result_msg += f"{msg_next[len('[R]'):]}\n"
+                msg += f"\t[{msg_next[len('[R]'):]}]\n"
+            else:
+                msg += f"\t[{msg_next}]\n"
+        else:
+            break
+    if mp.IsAlive():
+        if msg == "":
+            msg = "\tWorking...\n"
+        d['statustxt'] = f"Latest Status:\n{msg}"
+        d['done'] = False
+    else:
+        mp.Close()
+        TransferData()
+        if msg != "":
+            d['statustxt'] = f"Final Status:\n\t\n{msg}\n\tDone."
+        else:
+            d['statustxt'] = f"Final Status:\n\tDone."
+        d['done'] = True
+    d['description'] = mp.description
+    d['results'] = mp.result_msg
+    logging.debug(f"len array {len(g_a)} {len(aImageRecords)}")
+    return jsonify(d)
 
 @app.route("/geta")
 def get_a():

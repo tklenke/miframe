@@ -415,7 +415,7 @@ def BackupFile(szPath,szBackupPath):
         else:
             # add 1 and try again
             n += 1
-    return(True)
+    return(szBUFilePath)
     
 def SplitToArray(s, c):
     #split string s by character c and chomp spaces

@@ -6,7 +6,9 @@
             <h6 id="description">{{description}}</h6>
             <code id="ticker">Started</code>
             <pre><code id="statustxt"></code></pre>
-            <p><a href="{{url_for('get_a')}}">Get Array Now</a></p>
+            <pre><code id="results"></code></pre>
+            <p><a href="{{url_for('savenow')}}">Save Updated Database</a></p>
+            <p><a href="{{url_for('reload_db')}}">Undo Database Changes</a></p>
       </div>
     </div>
 {% endblock %}
@@ -28,6 +30,7 @@
             bDone = json.done;
             document.getElementById("statustxt").innerHTML = json.statustxt;
             document.getElementById("description").innerHTML = json.description;
+            document.getElementById("results").innerHTML = json.results;
         })
     };
         //update();

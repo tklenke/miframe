@@ -31,6 +31,7 @@ class MifProcess():
         self.function = hFunction
         self.data = {}
         self.description = ""
+        self.result_msg = ""
         return
 
     def SetFunction(self, hFunction, description = ""):
@@ -54,6 +55,7 @@ class MifProcess():
         return(True)
     
     def Start(self):
+        self.result_msg = ""
         if self.process is None:
             logging.debug(f"process is None")
             return(False)
@@ -190,7 +192,11 @@ def T2xAddList(a, nWait, mpQ = None):
     Puts(f"[H]Add List (2)", mpQ)
     Puts(f"Starting Second Add List", mpQ)
     TAddList(a, nWait, mpQ)
+    Puts(f"Removing a record", mpQ)
+    r = a[5]
+    a.remove(r)
     Puts(f"Complete 2x Add List", mpQ)
+    
     return
 
 #----------MAIN------------    
