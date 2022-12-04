@@ -436,7 +436,7 @@ class FullscreenWindow:
         return "break"
 
     def runner(self):
-        global g_bServerLive, g_ServerIP, g_ServerPort, g_IniDirty, g_szIniPath
+        global g_bServerLive, g_ServerIP, g_ServerPort, g_IniDirty, g_szIniPath, g_runner_mx_tick
         self.nRunnerTick += 1
         logging.debug(f"runner status: [{self.nRunnerTick}]{self.sRunner} server live {g_bServerLive}")
         if self.sRunner == 'init':
@@ -501,7 +501,7 @@ class FullscreenWindow:
                 return()                
                 
             #do maintenance tasks every 10 minutes
-            if self.nRunnerTick > 6:
+            if self.nRunnerTick > g_runner_mx_tick:
                 self.sysMsg.set(f"Running Maintenance Tasks")             
                 self.nRunnerTick = 0
                 #check server for ini changes
@@ -525,9 +525,10 @@ class FullscreenWindow:
 if __name__ == '__main__':
     if cfg.getboolean('LEVEL','debug'):
         logging.getLogger().setLevel(logging.DEBUG)
+        g_runner_mx_tick = 6
     else:
         logging.getLogger().setLevel(logging.ERROR)
-        
+        g_runner_mx_tick = 600
     #set up constants    
     ui_locale = '' # e.g. 'fr_FR' fro French, '' as default
     time_format = 12 # 12 or 24
