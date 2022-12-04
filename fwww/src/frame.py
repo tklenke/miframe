@@ -30,7 +30,7 @@ from PIL import Image, ImageTk, ImageFile
 from PIL.ExifTags import TAGS
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 #MiFrame Shared library
-from mif import ImageRecord
+from mif import ImageRecord, CheckPathSlash
 import mif
 import seeker
 
@@ -58,6 +58,8 @@ def SaveIni():
     
 
 def UpdateCfgWithDict(d):
+    if d is None:
+        return (False)
     bDirty = False
 
     for key in d.keys():
@@ -65,6 +67,8 @@ def UpdateCfgWithDict(d):
         if key in cfg:
             #check next level
             for key2 in d[key]:
+                if key2 == 'timestamp':
+                    continue
                 if key2 not in cfg[key] or str(d[key][key2]) != str(cfg[key][key2]):
                     print("1",key,key2)
                     cfg[key][key2] = str(d[key][key2])
@@ -77,32 +81,45 @@ def UpdateCfgWithDict(d):
                 bDirty = True
     return(bDirty)
 
-def GetIniFromServer():
-    #get ini record
-    ini_url = f"http://{g_ServerIP}:{g_ServerPort}/{g_MachineID}/getini"
+def GetJSONFromServer(szRoute):
+    json_url = f"http://{g_ServerIP}:{g_ServerPort}/{szRoute}"
     try:
-        r = requests.get(ini_url,timeout=2)
+        r = requests.get(json_url,timeout=2)
     except:
         return(None)
     if r.status_code != 200:
         return(None)
-
     dDict = r.json()
-
     return(dDict)
+    
+def GetImageFromServer(nId):
+    image_url = f"http://{g_ServerIP}:{g_ServerPort}/{nId}/img"
+    try:
+        r = requests.get(image_url,timeout=2)
+    except:
+        g_bServerLive = False
+        return(None)
+    if r.status_code != 200:
+        logging.info(f"unexpected server response [{r.status_code }]")
+        return(None)
+        
+    img_data = io.BytesIO(r.content)
+    return (img_data) 
+    
         
 def ScanFallbackDir(aFBRecs):
     if len(aFBRecs) > 0:
         for val in aFBRecs:
             aFBRecs.pop()
-    aFileScans = os.scandir(g_photo_dir)
+    aFileScans = os.scandir(g_fallback_dir)
     for fScan in aFileScans:
         if fScan.is_file():
             (root,ext)=os.path.splitext(fScan.name)
             ext = ext.lower()
             if '.jpg' == ext:
                 aFBRecs.append(ImageRecord(fScan.path))   
-    return(aFBRecs)            
+                #this also works to not display logos (png) files as fallback file
+    return(aFBRecs)
 
 
 def CheckPhotoServer():
@@ -112,28 +129,28 @@ def CheckPhotoServer():
 ## Request Image from PhotoServer
     #get img record
     # ~ image_record_url = f"http://{g_ServerIP}:{g_ServerPort}/selectir"
-    image_record_url = f"http://{g_ServerIP}:{g_ServerPort}/{g_MachineID}/selectirmid"
-    try:
-        r = requests.get(image_record_url,timeout=2)
-    except:
-        return(None,None)
-    if r.status_code != 200:
-        return(None,None)
+    global g_bServerLive
+    
+    dDict = GetJSONFromServer(f"{g_MachineID}/selectirmid")
+    if dDict is None:
+        return (None, None)
 
-    dDict = r.json()
     imgRec = ImageRecord(dAttr = dDict)
 
-    image_url = f"http://{g_ServerIP}:{g_ServerPort}/{dDict['id']}/img"
-    try:
-        r = requests.get(image_url,timeout=2)
-    except:
-        return(None,None)
-    if r.status_code != 200:
-        return(None,None)
+    # ~ image_url = f"http://{g_ServerIP}:{g_ServerPort}/{dDict['id']}/img"
+    # ~ try:
+        # ~ r = requests.get(image_url,timeout=2)
+    # ~ except:
+        # ~ g_bServerLive = False
+        # ~ return(None,None)
+    # ~ if r.status_code != 200:
+        # ~ logging.info(f"unexpected server response [{r.status_code }]")
+        # ~ return(None,None)
         
-    img_data = io.BytesIO(r.content)    
+    # ~ img_data = io.BytesIO(r.content)    
+    img_data = GetImageFromServer(dDict['id'])
     img = Image.open(img_data)
-    
+    g_bServerLive = True
     return (img,imgRec)
 
 
@@ -165,7 +182,7 @@ def GetNextImage():
         logging.debug(f"fallback file")
         return (img, oImgMeta)
     #else
-    img = Image.open( g_photo_dir + "1x1white.png")
+    img = Image.open( g_fallback_dir + "MiFrameLogoFull.png")
     
     return(img, None)
 
@@ -230,6 +247,45 @@ def SetScreenGlobals(width,height,corner_width,corner_height):
     g_max_image_height = g_screen_height - 3*g_corner_height
     g_image_ratio = float(g_max_image_width/g_max_image_height)
     return ()
+    
+def CheckIni():
+    dIni = GetJSONFromServer(f"{g_MachineID}/getini")
+    if UpdateCfgWithDict(dIni):
+        logging.debug(f"Ini changes. saving")
+        SaveIni()
+    return ()
+        
+def CheckFallbackPhotos():
+    global g_aFBRecs, g_fallback_dir
+    bReloadFallbacks = False
+    dFallbacks = GetJSONFromServer(f"{g_MachineID}/fallbacks")
+    #returns dict of [ImageRecId]:[filename]
+    if dFallbacks:
+        #check to see if in list of fallback photos
+        logging.debug(f"server returned {len(dFallbacks.keys())} fallbacks")
+        for key in dFallbacks.keys():
+            bFound = False
+            szFileName = dFallbacks[key].split('/')[-1]
+            logging.debug(f"checking server fallback {szFileName}")
+            for rec in g_aFBRecs:
+                szExistFB = rec.path.split('/')[-1]
+                if szExistFB == szFileName:
+                    bFound = True
+            if not bFound:
+                #save it
+                bReloadFallbacks = True
+                logging.debug(f"server fallback {szFileName} not found. Saving...")
+                imgdata = GetImageFromServer(key)
+                if imgdata is not None:
+                    #save to file
+                    szSavePath = f"{g_fallback_dir}{szFileName}"
+                    logging.debug(f"Saving new fallback to {szSavePath}")
+                    with open(szSavePath,'wb') as fp:
+                        fp.write(imgdata.getbuffer())
+        if bReloadFallbacks:
+            g_aFBRecs = []
+            CheckFallBackFiles()
+    return ()
 
 
 #--------main
@@ -243,19 +299,20 @@ class Photo(Frame):
             highlightthickness=0, font=('Helvetica', large_text_size), fg="white", bg="black",\
             compuund=None)
         self.panel1.grid(column=0,row=0, sticky=(S))
-        self.flip()
+        # ~ self.flip()
+        self.after(2000, self.flip)
     
     def flip(self):
-        if self.parent.parent.mainMsg.get() == '':
-            logging.debug(f"image[{self.parent.parent.mainMsg.get()}]")
-            display_image = GetDisplayReadyImage()
+        # ~ if self.parent.parent.mainMsg.get() == '':
+        logging.debug(f"image[{self.parent.parent.mainMsg.get()}]")
+        display_image = GetDisplayReadyImage()
 
-            #show the photo
-            self.panel1.config(image=display_image)
-            self.panel1.image = display_image
-        else:
-            logging.debug(f"text[{self.parent.parent.mainMsg.get()}]")
-            self.panel1.config(image=None)
+        #show the photo
+        self.panel1.config(image=display_image)
+        self.panel1.image = display_image
+        # ~ else:
+            # ~ logging.debug(f"text[{self.parent.parent.mainMsg.get()}]")
+            # ~ self.panel1.config(image=None)
             
         self.after(cfg.getint('FRAME','flip_after_millisecs'), self.flip)
         
@@ -316,8 +373,8 @@ class SystemMsg(Frame):
         logging.debug(f"starting system msg")
         Frame.__init__(self, parent, bg='black')
         self.parent=parent
-        self.textmsgLbl = Label(self, textvariable=self.parent.parent.sysMsg, font=('Helvetica', medium_text_size), fg="white", bg="black")
-        self.textmsgLbl.grid(column=0,row=0)
+        self.textmsgLbl = Label(self, textvariable=self.parent.parent.sysMsg, font=('Helvetica', small_text_size), fg="white", bg="black")
+        self.textmsgLbl.grid(column=0,row=0,sticky=(S))
 
 class FullscreenWindow:
 
@@ -337,6 +394,7 @@ class FullscreenWindow:
 
         #set up runner and initial message
         self.sRunner = 'init'
+        self.nRunnerTick = 0
         self.runner()
 
         #pad out screen
@@ -379,6 +437,8 @@ class FullscreenWindow:
 
     def runner(self):
         global g_bServerLive, g_ServerIP, g_ServerPort, g_IniDirty, g_szIniPath
+        self.nRunnerTick += 1
+        logging.debug(f"runner status: [{self.nRunnerTick}]{self.sRunner} server live {g_bServerLive}")
         if self.sRunner == 'init':
             logging.debug(f"init")
             self.mainMsg = StringVar()
@@ -386,13 +446,13 @@ class FullscreenWindow:
             self.sysMsg = StringVar()
             self.sysMsg.set('Starting MiFrame...')            
             self.sRunner = 'server-unknown'
-            self.tk.after(1500, self.runner)
+            self.tk.after(5000, self.runner)
             return()
         elif self.sRunner == 'server-unknown':
             logging.debug(f"server-unknown")
             self.sysMsg.set(f"Checking for server {g_ServerIP}")
             self.sRunner = 'server-check'
-            self.tk.after(1000, self.runner)
+            self.tk.after(100, self.runner)
             return()
         elif self.sRunner == 'server-check':
             logging.debug(f"server-check")
@@ -402,7 +462,7 @@ class FullscreenWindow:
                 self.mainMsg.set('')
                 # ~ self.mainMsg = None
                 self.sRunner = 'nominal'
-                self.tk.after(10000, self.runner)
+                self.tk.after(100, self.runner)
                 return()                
             else:
                 g_bServerLive = False
@@ -439,19 +499,22 @@ class FullscreenWindow:
                 self.sRunner = 'server-check'
                 self.tk.after(100, self.runner)
                 return()                
+                
+            #do maintenance tasks every 10 minutes
+            if self.nRunnerTick > 6:
+                self.sysMsg.set(f"Running Maintenance Tasks")             
+                self.nRunnerTick = 0
+                #check server for ini changes
+                logging.debug(f"doing mx tasks")
+                CheckIni()
+                #check server for list of favorites
+                CheckFallbackPhotos()
             
-            #do maintenance tasks
-            #check server for ini changes
-            dIni = GetIniFromServer()
-            if UpdateCfgWithDict(dIni):
-                SaveIni()
-            
-            #all is truly nominal so check again in a minute
+            #all is truly nominal so check again in a second
             self.mainMsg.set('')
             self.sysMsg.set('')
-            # ~ self.mainMsg = None
             self.sRunner = 'nominal'
-            self.tk.after(60000, self.runner)
+            self.tk.after(1000, self.runner)
             return()                
 
         #else
@@ -475,7 +538,7 @@ if __name__ == '__main__':
     medium_text_size = 16
     small_text_size = 8
 
-    g_photo_dir = cfg['PATHS']['photo_fallback_path']
+    g_fallback_dir = CheckPathSlash(cfg['PATHS']['frame_fallback_path'])
     g_i_fallback = 0
     
     g_ServerIP = cfg['NETWORK']['server_ip']

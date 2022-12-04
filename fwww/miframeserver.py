@@ -8,6 +8,7 @@ import logging
 import io
 import os
 import multiprocessing
+import subprocess
 from PIL import Image, ImageTk, ImageFile
 #MiFrame Modules
 import selector
@@ -160,9 +161,9 @@ def home():
     aIds = aRecentImgIds[-10:]
     aIds.reverse()
     return render_template('home.html',page_title='Home',aids=aIds)
-    
-@app.route("/selectir")
-def selectirj():
+
+@app.route("/<string:machine_id>/selectirmid")
+def selectirmidj(machine_id):
 #select next image record and return json with index into aImageRecords
     global aIdQueue
     if len(aIdQueue) > 0:
@@ -175,11 +176,7 @@ def selectirj():
     dDict = aImageRecords[nId].__dict__
     dDict['id'] = nId
     return jsonify(dDict)
-
-@app.route("/<string:machine_id>/selectirmid")
-def selectirmidj(machine_id):
-    return redirect(url_for('selectirj'))
-
+    
 #--------image routes----------------    
 @app.route("/<int:img_id>/img")
 def getimage(img_id):
@@ -213,7 +210,6 @@ def getthumb(img_id,width,height):
         iRot.save(img_io, 'JPEG', quality=70)
         img_io.seek(0)
         return send_file(img_io, mimetype='image/jpeg')
-
 
 #----edit routes--------
 @app.route("/<int:img_id>/edit")
@@ -344,6 +340,10 @@ def reload_db():
     aDirtyIds = []
     return redirect(url_for('utilities'))
     
+@app.route("/systemshutdown")
+def shutdown():
+    subprocess.run("shutdown -h 0", shell=True, check=True)
+    return "Shutting down!"
 
 #-----client-server data exchange routes----------------
 @app.route("/chksrvr")
@@ -358,20 +358,17 @@ def get_frame_ini(machine_id):
     dDict['NETWORK']={}
     return jsonify(dDict)
 
-#-----photo librarian routes----------------
-@app.route("/testmp")
-def test_mp():
-    global mp, g_a
-    if mp.IsAlive():
-        return make_response(render_template('error.html',error_msg='Cannot start process twice.' ), 400)
-    logging.debug(f"len array {len(g_a)}")
-    pa = mp.NewList('a',g_a)
-    mp.SetFunction(T2xAddList,"2x Add to List")
-    mp.SetArgs((pa,.5))
-    mp.Start()
-    return render_template('process_status.html',page_title='TAdd',description=mp.description,\
-        status_url=url_for('status_mp'))
+@app.route("/<string:machine_id>/fallbacks")
+def get_frame_fallbacks(machine_id):
+    #get list of favorite ids
+    aIds = selector.GetFavoriteIds(aImageRecords)
+    #returns dict of [ImageRecId]:[path]
+    dDict = {}
+    for i in aIds:
+        dDict[i] = aImageRecords[i].path
+    return jsonify(dDict)
 
+#-----photo librarian routes----------------
 @app.route("/rundbmx")
 def run_db_mx():
     global mp
@@ -434,6 +431,25 @@ def status_mp():
     d['results'] = mp.result_msg
     logging.debug(f"len array {len(g_a)} {len(aImageRecords)}")
     return jsonify(d)
+
+#-----testing routes----------------
+@app.route("/<int:num_secs>//pausebeforeresponse")
+def pause_before_response(num_secs):
+    time.sleep(num_secs)
+    return redirect(url_for('utilities'))
+
+@app.route("/testmp")
+def test_mp():
+    global mp, g_a
+    if mp.IsAlive():
+        return make_response(render_template('error.html',error_msg='Cannot start process twice.' ), 400)
+    logging.debug(f"len array {len(g_a)}")
+    pa = mp.NewList('a',g_a)
+    mp.SetFunction(T2xAddList,"2x Add to List")
+    mp.SetArgs((pa,.5))
+    mp.Start()
+    return render_template('process_status.html',page_title='TAdd',description=mp.description,\
+        status_url=url_for('status_mp'))
 
 @app.route("/geta")
 def get_a():

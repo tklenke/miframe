@@ -33,6 +33,7 @@
             Blocked
             </a>
           </li>
+          <li>In Queue</li>
         </div>
         <div class="four columns">
           <li>
@@ -40,15 +41,17 @@
             Force Save Now
             </a>
           </li>
-          <li>In Queue</li>
           <li>
-            <a href="{{url_for('backup_db')}}">Backup Database</a>
+            <a href="{{url_for('backup_db')}}" onclick="clickAndDisable(this);">Backup Database</a>
           </li>
           <li>
-            <a href="{{url_for('run_db_mx')}}">Run Database Maintenance</a>
+            <a href="{{url_for('run_db_mx')}}" onclick="clickAndDisable(this);">Run Database Maintenance</a>
           </li>
           <li>
-            <a href="{{url_for('import_photos')}}">Import New Photos</a>
+            <a href="{{url_for('import_photos')}}" onclick="clickAndDisable(this);">Import New Photos</a>
+          </li>
+          <li>
+            <a href="{{url_for('shutdown')}}" onclick="clickAndDisable(this);">Shutdown MiFrame Server</a>
           </li>
         </div>
       </ul>
@@ -61,4 +64,15 @@
         </code></pre>
       </div>
     </div>
+{% endblock %}
+{% block script %}
+<script> 
+   function clickAndDisable(link) {
+     // disable subsequent clicks
+     link.innerHTML = "Starting... One Click Only Please"
+     link.onclick = function(event) {
+        event.preventDefault();
+     }
+   }   
+</script>
 {% endblock %}
