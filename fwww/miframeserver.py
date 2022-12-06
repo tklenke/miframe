@@ -13,13 +13,16 @@ from PIL import Image, ImageTk, ImageFile
 #MiFrame Modules
 import selector
 from librarian import DatabaseMaintenance, ImportPhotos
-from src.mif import CheckPathSlash, BackupFile
+from src.mif import CheckPathSlash, BackupFile, SaveIni
 from mpwrapper import MifProcess
 #for testing
 from mpwrapper import TBuildList, TAddList, TUpdateList, T2xAddList
 g_a = TBuildList()
 nCounter = 0
 #end testing
+
+
+        
 
 #-----------------START UP Tasks--------------------
 logging.basicConfig(level=logging.INFO,format='%(levelname)s:%(funcName)s[%(lineno)d]:%(message)s')
@@ -30,6 +33,7 @@ if not os.path.exists(g_szIniPath):
     logging.critical(f"Can't find config file {g_szIniPath}")
     exit()
 cfg.read(g_szIniPath)
+g_bDirtyIni = False
 
 ### Set Up Logging
 logging.info(f"log debug [{cfg.getboolean('LEVEL','debug')}]")
@@ -77,20 +81,6 @@ logging.info(f"Photo Library at: {szPhotoRoot}")
 mp = MifProcess()
 
 
-#----------Main App--------------------
-app = Flask(__name__)
-# Now we can access the configuration variables via app.config["VAR_NAME"].
-app.config.from_object('config')
-app.config["DEBUG"]
-#need this to flash messages
-szMachineId = selector.GetMachineId()
-app.secret_key = szMachineId
-
-if __name__ == "__main__":
-    #start main 
-    print("miframeserver __main__")
-    app.run(host='0.0.0.0')
-
 #-------functions--------------------------------------------
 def GetServerStats():
     dStats = {}
@@ -121,13 +111,40 @@ def TransferData():
         #put one record in to force save
         aDirtyIds.append(0)   
 
+def GetMachineOrientation(mid):
+    global g_bDirtyIni
+    if cfg.has_option(mid,'display_type'):
+        return (cfg.get(mid,'display_type'))
+    logging.info(f"Setting machine {mid} orientation to both")
+    cfg[mid] = {}
+    cfg.set(mid,'flip_after_millisecs','60000')
+    cfg.set(mid,'display_type','both')
+    g_bDirtyIni = True
+    return ('both')
+
+
+#----------Main App--------------------
+app = Flask(__name__)
+# Now we can access the configuration variables via app.config["VAR_NAME"].
+app.config.from_object('config')
+app.config["DEBUG"]
+#need this to flash messages
+szMachineId = selector.GetMachineId()
+app.secret_key = szMachineId
+
+if __name__ == "__main__":
+    #start main 
+    print("miframeserver __main__")
+    app.run(host='0.0.0.0')
+
+
 #-----------------RECURRING TASKS----------------------------
 #starts with first request, then re-runs indefinately
 @app.before_first_request
 def activate_recurring_job():
     def run_job():
         while True:
-            global dtLastSave, aDirtyIds, mp, g_a
+            global dtLastSave, aDirtyIds, g_bDirtyIni, g_szIniPath, mp, g_a
             logging.debug(f"Running recurring job")
             if len(aDirtyIds) > 0:
                 nRecs = 0
@@ -147,6 +164,11 @@ def activate_recurring_job():
                     mp.Close()
                     TransferData()
                     logging.debug(f"mp process not alive. released")
+            ## if config needs to be updated then save it out
+            if g_bDirtyIni:
+                logging.debug(f"Saving ini file {g_szIniPath}")
+                g_bDirtyIni = False
+                SaveIni(cfg,g_szIniPath)
             logging.debug(f"Done recurring job")
             time.sleep(60)
 
@@ -166,11 +188,22 @@ def home():
 def selectirmidj(machine_id):
 #select next image record and return json with index into aImageRecords
     global aIdQueue
-    if len(aIdQueue) > 0:
-        nId = aIdQueue.pop()
-    else:
-        aIdQueue = selector.Shuffle(aImageRecords)
-        nId = aIdQueue.pop()
+    # Get orientation for this machine
+    orientation = GetMachineOrientation(machine_id)
+    # for each image in queue if matches orientation then return
+    nId = None
+    while (nId is None):
+        for i in range(0,len(aIdQueue)):
+            logging.debug(f"o:{orientation} Id:{aIdQueue[i]} IsPortrait:{aImageRecords[aIdQueue[i]].IsPortrait()}")
+            if (orientation == 'both') or \
+               (orientation == 'portrait' and aImageRecords[aIdQueue[i]].IsPortrait()) or \
+               (orientation == 'landscape' and aImageRecords[aIdQueue[i]].IsLandscape()):
+                nId = aIdQueue[i]
+                aIdQueue.pop(i)
+                break                
+        # if get to end of queue then shuffle all records and try again
+        if nId is None:
+            aIdQueue = selector.Shuffle(aImageRecords)
     aRecentImgIds.append(nId)
     aImageRecords[nId].last_played = datetime.datetime.now()
     dDict = aImageRecords[nId].__dict__
@@ -353,8 +386,6 @@ def check_server():
 @app.route("/<string:machine_id>/getini")
 def get_frame_ini(machine_id):
     dDict={}
-    dDict['FRAME']={}
-    dDict['FRAME']['machine_id']=machine_id
     dDict['NETWORK']={}
     return jsonify(dDict)
 

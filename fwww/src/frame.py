@@ -30,7 +30,7 @@ from PIL import Image, ImageTk, ImageFile
 from PIL.ExifTags import TAGS
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 #MiFrame Shared library
-from mif import ImageRecord, CheckPathSlash
+from mif import ImageRecord, CheckPathSlash, UpdateCfgWithDict, SaveIni
 import mif
 import seeker
 
@@ -45,41 +45,11 @@ if not os.path.exists(g_szIniPath):
 cfg.read(g_szIniPath)
 
 #--------functions
-
-def SaveIni():
-    logging.debug(f"Saving Ini File {g_szIniPath}")
-    if not 'VERSION' in cfg:
-        cfg['VERSION'] = {}
-    cfg['VERSION']['timestamp'] = time.strftime("%a, %d %b %Y %H:%M:%S")
-    with open(g_szIniPath, 'w') as configfile:
-        cfg.write(configfile)
-    g_IniDirty = False
-    return()
-    
-
-def UpdateCfgWithDict(d):
-    if d is None:
-        return (False)
-    bDirty = False
-
-    for key in d.keys():
-        #top level
-        if key in cfg:
-            #check next level
-            for key2 in d[key]:
-                if key2 == 'timestamp':
-                    continue
-                if key2 not in cfg[key] or str(d[key][key2]) != str(cfg[key][key2]):
-                    print("1",key,key2)
-                    cfg[key][key2] = str(d[key][key2])
-                    bDirty = True
-        else:
-            cfg[key] = {}
-            for key2 in d[key]:
-                print("1",key,key2)
-                cfg[key][key2] = str(d[key][key2])
-                bDirty = True
-    return(bDirty)
+def SetFrameIniDefaults(mid):
+    logging.debug(f"setting frame defaults {mid}")
+    cfg[g_MachineID] = {}
+    cfg.set(g_MachineID,'flip_after_millisecs','60000')
+    cfg.set(g_MachineID,'display_type','both')
 
 def GetJSONFromServer(szRoute):
     json_url = f"http://{g_ServerIP}:{g_ServerPort}/{szRoute}"
@@ -137,18 +107,16 @@ def CheckPhotoServer():
 
     imgRec = ImageRecord(dAttr = dDict)
 
-    # ~ image_url = f"http://{g_ServerIP}:{g_ServerPort}/{dDict['id']}/img"
-    # ~ try:
-        # ~ r = requests.get(image_url,timeout=2)
-    # ~ except:
-        # ~ g_bServerLive = False
-        # ~ return(None,None)
-    # ~ if r.status_code != 200:
-        # ~ logging.info(f"unexpected server response [{r.status_code }]")
-        # ~ return(None,None)
-        
-    # ~ img_data = io.BytesIO(r.content)    
-    img_data = GetImageFromServer(dDict['id'])
+    #we just got a response from the server, so let's try a bit harder
+    nTries = 0
+    while (nTries < 3):    
+        img_data = GetImageFromServer(dDict['id'])
+        if img_data is not None:
+            break
+        nTries += 1
+    if img_data is None:
+        g_bServerLive = False
+        return (None,None)
     img = Image.open(img_data)
     g_bServerLive = True
     return (img,imgRec)
@@ -249,10 +217,12 @@ def SetScreenGlobals(width,height,corner_width,corner_height):
     return ()
     
 def CheckIni():
+    global g_bDirtyIni
     dIni = GetJSONFromServer(f"{g_MachineID}/getini")
-    if UpdateCfgWithDict(dIni):
+    if UpdateCfgWithDict(cfg,dIni) or g_bDirtyIni:
         logging.debug(f"Ini changes. saving")
-        SaveIni()
+        SaveIni(cfg,g_szIniPath)
+        g_bDirtyIni = False
     return ()
         
 def CheckFallbackPhotos():
@@ -314,7 +284,7 @@ class Photo(Frame):
             # ~ logging.debug(f"text[{self.parent.parent.mainMsg.get()}]")
             # ~ self.panel1.config(image=None)
             
-        self.after(cfg.getint('FRAME','flip_after_millisecs'), self.flip)
+        self.after(cfg.getint(g_MachineID,'flip_after_millisecs'), self.flip)
         
 
 class Clock(Frame):
@@ -436,7 +406,7 @@ class FullscreenWindow:
         return "break"
 
     def runner(self):
-        global g_bServerLive, g_ServerIP, g_ServerPort, g_IniDirty, g_szIniPath, g_runner_mx_tick
+        global g_bServerLive, g_ServerIP, g_ServerPort, g_bDirtyIni, g_szIniPath, g_runner_mx_tick
         self.nRunnerTick += 1
         logging.debug(f"runner status: [{self.nRunnerTick}]{self.sRunner} server live {g_bServerLive}")
         if self.sRunner == 'init':
@@ -482,7 +452,7 @@ class FullscreenWindow:
                 if szIP != g_ServerIP:
                     g_ServerIP = szIP
                     cfg['NETWORK']['server_ip'] = szIP
-                    g_IniDirty = True
+                    g_bDirtyIni = True
                 # ~ self.mainMsg = None
                 self.mainMsg.set('')
             #give nominal a chance to run
@@ -545,10 +515,15 @@ if __name__ == '__main__':
     g_ServerIP = cfg['NETWORK']['server_ip']
     g_ServerPort = cfg.getint('NETWORK','server_port')
     g_bServerLive = False
-    
-    g_MachineID = mif.GetMachineId()
-    g_IniDirty = False    
 
+    
+    #get Frame set up information
+    g_bDirtyIni = False 
+    g_MachineID = mif.GetMachineId()
+    if not cfg.has_option(g_MachineID,'flip_after_millisecs'):
+        SetFrameIniDefaults(g_MachineID)
+        g_bDirtyIni = True
+   
     #build fallback list
     logging.debug(f"building fallback list")
     g_aFBRecs = []

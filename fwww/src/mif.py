@@ -16,7 +16,7 @@ import csv
 import os
 import shutil
 import logging
-import datetime
+import datetime, time
 import uuid
 
 TS_EPOCH_DAY = 631170000.0
@@ -321,6 +321,19 @@ class ImageRecord:
         self.edited = datetime.datetime.now()
         return()
         
+    def IsPortrait(self):
+        #1,2,3,4 = landscape
+        if self.orientation is None:
+            return(False)
+        if int(self.orientation) in [5,6,7,8]:
+            return(True)
+        return(False)
+        
+    def IsLandscape(self):
+        if self.IsPortrait():
+            return(False)
+        return(True)
+        
 #------end ImageRecord definition   
 
 #load in csv file
@@ -382,7 +395,9 @@ def DictInc(d,k):
         
 def GetMachineId():
     #remove first 9 characters as that is generated from timestamp and we want non-changing portion
-    return(str(uuid.uuid1())[9:])
+    r = str(uuid.uuid1())[24:]
+    logging.debug(f"uuid:{uuid.uuid1()} mid:{r}")
+    return(r)
     
 def CheckPathSlash(szP):
     #ensure path ends in slash
@@ -423,3 +438,35 @@ def SplitToArray(s, c):
     for i in range(0,len(a)):
         a[i] = a[i].strip()
     return(a)
+    
+def SaveIni(oConfig, szIniPath):
+    logging.debug(f"Saving Ini File {szIniPath}")
+    if not 'VERSION' in oConfig:
+        cfg['VERSION'] = {}
+    oConfig['VERSION']['timestamp'] = time.strftime("%a, %d %b %Y %H:%M:%S")
+    with open(szIniPath, 'w') as configfile:
+        oConfig.write(configfile)
+    return()
+    
+
+def UpdateCfgWithDict(oConfig,d):
+    if d is None:
+        return (False)
+    bDirty = False
+
+    for key in d.keys():
+        #top level
+        if key in oConfig:
+            #check next level
+            for key2 in d[key]:
+                if key2 == 'timestamp':
+                    continue
+                if key2 not in oConfig[key] or str(d[key][key2]) != str(oConfig[key][key2]):
+                    oConfig[key][key2] = str(d[key][key2])
+                    bDirty = True
+        else:
+            oConfig[key] = {}
+            for key2 in d[key]:
+                oConfig[key][key2] = str(d[key][key2])
+                bDirty = True
+    return(bDirty)
