@@ -35,6 +35,11 @@ photos from your library.
   - create frame service via:
     `sudo systemctl --force --full edit miframe.service`  
     and paste following (note: [USER] is pi, so change if your user is different):
+    
+1. Alternate for running on linux or windows standalone
+  - set environment variable MIFRAME_INI to path to miframe.ini file
+    - Linux `set MIFRAME_INI=\home\user\miframe.ini`
+    - Windows PS `$env:MIFRAME_INI = 'c:\users\user\documents\miframe\miframe.ini`
 
 ```
 [Unit]
